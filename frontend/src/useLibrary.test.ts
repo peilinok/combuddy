@@ -29,4 +29,11 @@ describe("useLibrary", () => {
     lib.reveal(1);
     expect(lib.revealed.value.has(1)).toBe(true);
   });
+  it("openLightbox/closeLightbox toggles the zoomed model", () => {
+    const lib = useLibrary();
+    lib.openLightbox({ id: 1, sha256: "x", nsfw_level: 4 });
+    expect(lib.lightbox.value.id).toBe(1);
+    lib.closeLightbox();
+    expect(lib.lightbox.value).toBe(null);
+  });
 });

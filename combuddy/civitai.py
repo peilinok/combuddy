@@ -1,14 +1,21 @@
-import json, os, re, time, urllib.request, urllib.error
+import json, os, time, urllib.request, urllib.error
 
 _API = "https://civitai.com/api/v1/model-versions/by-hash/"
 _UA = "combuddy (model identity lookup)"
 _TIMEOUT = 10
 _DELAY = 0.3          # 礼貌延迟(秒),顺序请求
 
+def _pick_preview(imgs: list) -> dict:
+    """预览优先图片;没有图片再退视频;都没有 type 标记则取第一张。"""
+    for want in ("image", "video"):
+        for im in imgs:
+            if im.get("type") == want:
+                return im
+    return imgs[0] if imgs else {}
+
 def parse_version(data: dict) -> dict:
     model = data.get("model") or {}
-    imgs = data.get("images") or []
-    img = imgs[0] if imgs else {}
+    img = _pick_preview(data.get("images") or [])
     return {
         "name": model.get("name"),
         "version_name": data.get("name"),
@@ -31,10 +38,16 @@ def fetch_by_hash(sha256: str):
     except Exception:
         return ("skip", None)
 
-def download_thumb(url: str, dest: str) -> bool:
-    thumb = re.sub(r"/width=\d+/", "/width=256/", url)     # 尽量取小图
+def _sized(url: str, width: int) -> str:
+    """把 Civitai 图片 URL 的变换段改成 anim=false,width=N(视频取静态帧 + 限宽)。"""
+    parts = url.rsplit("/", 2)
+    if len(parts) == 3 and "civitai" in parts[0]:
+        return f"{parts[0]}/anim=false,width={width}/{parts[2]}"
+    return url
+
+def download_image(url: str, dest: str) -> bool:
     try:
-        req = urllib.request.Request(thumb, headers={"User-Agent": _UA})
+        req = urllib.request.Request(url, headers={"User-Agent": _UA})
         with urllib.request.urlopen(req, timeout=_TIMEOUT) as r:
             data = r.read()
         with open(dest, "wb") as f:
@@ -64,7 +77,7 @@ def _upsert(conn, model_id, sha256, found, ident=None, image_path=None):
          ident.get("base_model"), ident.get("model_type"), ident.get("trigger_words"),
          ident.get("nsfw_level"), ident.get("civitai_url"), image_path, time.time()))
 
-def enrich_models(conn, progress=None, should_cancel=None, fetch=fetch_by_hash, download=download_thumb) -> dict:
+def enrich_models(conn, progress=None, should_cancel=None, fetch=fetch_by_hash, download=download_image) -> dict:
     pv = _previews_dir(conn); os.makedirs(pv, exist_ok=True)
     rows = conn.execute(
         """SELECT m.id, m.sha256 FROM models m LEFT JOIN civitai c ON c.model_id = m.id
@@ -79,9 +92,12 @@ def enrich_models(conn, progress=None, should_cancel=None, fetch=fetch_by_hash, 
         kind, ident = fetch(r["sha256"])
         if kind == "found":
             image_path = None
-            if ident.get("image_url"):
-                if download(ident["image_url"], os.path.join(pv, r["sha256"] + ".jpg")):
-                    image_path = r["sha256"] + ".jpg"
+            url = ident.get("image_url")
+            if url:
+                sha = r["sha256"]
+                if download(_sized(url, 256), os.path.join(pv, sha + ".jpg")):
+                    image_path = sha + ".jpg"
+                    download(_sized(url, 1024), os.path.join(pv, sha + "_hd.jpg"))  # HD 尽力而为
             _upsert(conn, r["id"], r["sha256"], 1, ident, image_path)
             conn.commit(); found += 1
         elif kind == "notfound":

@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { onMounted, onUnmounted } from "vue";
 import { useLibrary } from "../useLibrary";
 import { humanSize } from "../format";
-const { models, selected, search, flag, revealed, load, openDetail, error, shouldBlur, reveal } = useLibrary();
-onMounted(load);
+const { models, selected, search, flag, revealed, lightbox, load, openDetail, error,
+  shouldBlur, reveal, openLightbox, closeLightbox } = useLibrary();
+function onKey(e: KeyboardEvent) { if (e.key === "Escape") closeLightbox(); }
+onMounted(() => { load(); window.addEventListener("keydown", onKey); });
+onUnmounted(() => window.removeEventListener("keydown", onKey));
 function setFlag(f: string) { flag.value = flag.value === f ? "" : f; load(); }
 </script>
 <template>
@@ -27,8 +30,8 @@ function setFlag(f: string) { flag.value = flag.value === f ? "" : f; load(); }
             <td class="py-1.5 text-[#d8d8de]">
               <span class="inline-flex items-center gap-2">
                 <img v-if="m.has_preview" :src="'/api/preview/' + m.sha256"
-                  :class="['w-7 h-7 rounded object-cover', shouldBlur(m.nsfw_level) && !revealed.has(m.id) ? 'blur-sm' : '']"
-                  @click.stop="reveal(m.id)" />
+                  :class="['w-7 h-7 rounded object-cover cursor-zoom-in', shouldBlur(m.nsfw_level) && !revealed.has(m.id) ? 'blur-sm' : '']"
+                  @click.stop="openLightbox(m)" />
                 {{ m.civitai_name || m.display_name || m.filename }}
               </span>
             </td>
@@ -46,8 +49,8 @@ function setFlag(f: string) { flag.value = flag.value === f ? "" : f; load(); }
               <div v-if="selected.civitai_found" class="mt-2 border-t border-[#2a2a30] pt-2">
                 <div class="flex gap-3">
                   <img v-if="selected.has_preview" :src="'/api/preview/' + selected.sha256"
-                    :class="['w-24 h-24 rounded object-cover shrink-0', shouldBlur(selected.nsfw_level) && !revealed.has(selected.id) ? 'blur-md' : '']"
-                    @click="reveal(selected.id)" />
+                    :class="['w-24 h-24 rounded object-cover shrink-0 cursor-zoom-in', shouldBlur(selected.nsfw_level) && !revealed.has(selected.id) ? 'blur-md' : '']"
+                    @click="openLightbox(selected)" />
                   <div>
                     <div class="text-[#d8d8de] font-semibold">{{ selected.civitai_name }}
                       <span class="text-[#8a8a93] font-normal">· {{ selected.civitai_base }} · {{ selected.civitai_type }}</span></div>
@@ -65,5 +68,12 @@ function setFlag(f: string) { flag.value = flag.value === f ? "" : f; load(); }
         </template>
       </tbody>
     </table>
+    <div v-if="lightbox" class="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-6 cursor-zoom-out"
+      @click="closeLightbox">
+      <img :src="'/api/preview/' + lightbox.sha256 + '?hd=1'"
+        :class="['max-w-full max-h-full rounded shadow-2xl', shouldBlur(lightbox.nsfw_level) && !revealed.has(lightbox.id) ? 'blur-2xl cursor-pointer' : '']"
+        @click.stop="reveal(lightbox.id)" />
+      <button @click.stop="closeLightbox" class="absolute top-3 right-5 text-white/80 hover:text-white text-3xl leading-none">×</button>
+    </div>
   </div>
 </template>
