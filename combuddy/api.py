@@ -4,6 +4,17 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from . import db as dbm, config, stats, scan_service, queries, trash
 
+def _sniff_image(path: str) -> str:
+    with open(path, "rb") as f:
+        head = f.read(12)
+    if head[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if head[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "image/webp"
+    return "application/octet-stream"
+
 def create_app(db_path: str, static_dir: str | None = None) -> FastAPI:
     app = FastAPI(title="combuddy")
 
@@ -104,13 +115,14 @@ def create_app(db_path: str, static_dir: str | None = None) -> FastAPI:
         return res
 
     @app.get("/api/preview/{sha256}")
-    def api_preview(sha256: str):
+    def api_preview(sha256: str, hd: int = 0):
         if not re.fullmatch(r"[0-9a-fA-F]{64}", sha256):
             return JSONResponse({"error": "bad hash"}, status_code=404)
-        path = os.path.join(os.path.dirname(db_path), "previews", sha256 + ".jpg")
+        name = sha256 + ("_hd.jpg" if hd else ".jpg")
+        path = os.path.join(os.path.dirname(db_path), "previews", name)
         if not os.path.isfile(path):
             return JSONResponse({"error": "not found"}, status_code=404)
-        return FileResponse(path, media_type="image/jpeg")
+        return FileResponse(path, media_type=_sniff_image(path))
 
     if static_dir and os.path.isdir(static_dir):
         app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")

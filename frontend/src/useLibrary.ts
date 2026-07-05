@@ -7,6 +7,7 @@ export function useLibrary() {
   const search = ref(""); const flag = ref("");
   const nsfwThreshold = ref(1);
   const revealed = ref<Set<number>>(new Set());
+  const lightbox = ref<any | null>(null);
   const error = ref<string | null>(null);
 
   async function load() {
@@ -22,6 +23,9 @@ export function useLibrary() {
   }
   const shouldBlur = (level: number | null) => (level ?? 0) > nsfwThreshold.value;
   const reveal = (id: number) => { revealed.value = new Set(revealed.value).add(id); };
+  const openLightbox = (m: any) => { lightbox.value = m; };
+  const closeLightbox = () => { lightbox.value = null; };
 
-  return { models, selected, search, flag, revealed, error, load, openDetail, shouldBlur, reveal };
+  return { models, selected, search, flag, revealed, lightbox, error, load, openDetail,
+    shouldBlur, reveal, openLightbox, closeLightbox };
 }

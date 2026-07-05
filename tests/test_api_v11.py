@@ -50,8 +50,13 @@ def test_preview_endpoint(tmp_path):
     dbp = str(tmp_path / "c.sqlite")
     c = db.connect(dbp); db.init_schema(c); c.close()
     pv = tmp_path / "previews"; pv.mkdir()
-    (pv / ("a" * 64 + ".jpg")).write_bytes(b"IMG")
+    (pv / ("a" * 64 + ".jpg")).write_bytes(b"\xff\xd8\xff\xe0IMGDATA")       # JPEG 魔数
+    (pv / ("a" * 64 + "_hd.jpg")).write_bytes(b"\x89PNG\r\n\x1a\nHDDATA")    # PNG 魔数
     cl = TestClient(api.create_app(dbp))
-    assert cl.get(f"/api/preview/{'a'*64}").content == b"IMG"
-    assert cl.get(f"/api/preview/{'b'*64}").status_code == 404      # 不存在
-    assert cl.get("/api/preview/..%2f..%2fetc").status_code == 404  # 非 hex → 拒绝
+    r = cl.get(f"/api/preview/{'a'*64}")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg"   # 嗅探为 jpeg
+    hd = cl.get(f"/api/preview/{'a'*64}?hd=1")
+    assert hd.status_code == 200 and hd.content.endswith(b"HDDATA")             # HD 走 _hd.jpg
+    assert hd.headers["content-type"] == "image/png"                           # 嗅探为 png
+    assert cl.get(f"/api/preview/{'b'*64}").status_code == 404                  # 不存在
+    assert cl.get("/api/preview/..%2f..%2fetc").status_code == 404              # 非 hex → 拒绝

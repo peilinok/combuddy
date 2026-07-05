@@ -51,18 +51,21 @@ def test_enrich_found_notfound_skip(tmp_path):
     _seed(conn, [("aaa", "m1"), ("bbb", "m2"), ("ccc", "m3")])
     ident = {"name": "N", "version_name": "v", "base_model": "SDXL", "model_type": "LORA",
              "trigger_words": '["t"]', "nsfw_level": 2, "civitai_url": "u",
-             "image_url": "https://img/width=9/x.jpg"}
+             "image_url": "https://image.civitai.com/blob/original=true/x.jpg"}
     fetch = lambda sha: {"aaa": ("found", ident), "bbb": ("notfound", None),
                          "ccc": ("skip", None)}[sha]
     got = []
-    def dl(url, dest): got.append(dest); open(dest, "wb").write(b"IMG"); return True
+    def dl(url, dest): got.append((url, dest)); open(dest, "wb").write(b"IMG"); return True
     res = civitai.enrich_models(conn, fetch=fetch, download=dl)
     assert res["found"] == 1 and res["total"] == 3
     rows = {r["model_id"]: dict(r) for r in conn.execute("SELECT * FROM civitai")}
     assert rows[1]["found"] == 1 and rows[1]["name"] == "N" and rows[1]["image_path"] == "aaa.jpg"
     assert rows[2]["found"] == 0 and rows[2]["name"] is None
     assert 3 not in rows                                   # skip → 不写
-    assert len(got) == 1                                   # 只 found 的下图
+    calls = {os.path.basename(dest): url for url, dest in got}
+    assert "aaa.jpg" in calls and "aaa_hd.jpg" in calls     # found → 缩略图 + HD 各一张
+    assert "anim=false,width=256" in calls["aaa.jpg"]       # 缩略图确实按 256 sized
+    assert "anim=false,width=1024" in calls["aaa_hd.jpg"]   # HD 确实按 1024 sized
 
 def test_enrich_skips_already_checked(tmp_path):
     conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
@@ -91,3 +94,33 @@ def test_enrich_cancel_stops(tmp_path):
                                 fetch=lambda s: ("found", {}), download=lambda u, d: False)
     assert res["found"] == 0
     assert conn.execute("SELECT COUNT(*) c FROM civitai").fetchone()["c"] == 0
+
+def test_parse_prefers_image_over_video():
+    data = {"id": 1, "modelId": 2, "name": "v", "model": {"name": "M", "type": "Checkpoint"},
+            "trainedWords": [], "images": [
+                {"type": "video", "url": "https://image.civitai.com/b/original=true/v.mp4", "nsfwLevel": 8},
+                {"type": "image", "url": "https://image.civitai.com/b/original=true/i.jpeg", "nsfwLevel": 2}]}
+    ident = civitai.parse_version(data)
+    assert ident["image_url"].endswith("i.jpeg") and ident["nsfw_level"] == 2   # 跳过视频取图片
+
+def test_parse_falls_back_to_video():
+    data = {"id": 1, "modelId": 2, "name": "v", "model": {}, "trainedWords": [],
+            "images": [{"type": "video", "url": "https://image.civitai.com/b/original=true/v.mp4", "nsfwLevel": 1}]}
+    assert civitai.parse_version(data)["image_url"].endswith("v.mp4")            # 只有视频 → 退取视频
+
+def test_sized_rewrites_transform():
+    assert civitai._sized("https://image.civitai.com/blob/original=true/x.mp4", 256) == \
+        "https://image.civitai.com/blob/anim=false,width=256/x.mp4"
+    assert civitai._sized("https://image.civitai.com/blob/width=1024/y.jpeg", 100) == \
+        "https://image.civitai.com/blob/anim=false,width=100/y.jpeg"
+    assert civitai._sized("https://other.example/a/b/c", 256) == "https://other.example/a/b/c"
+
+def test_enrich_hd_fail_keeps_thumb(tmp_path):
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    _seed(conn, [("aaa", "m1")])
+    ident = {"name": "N", "image_url": "https://img/original=true/x.jpg"}
+    def dl(url, dest):
+        if dest.endswith("_hd.jpg"): return False          # HD 下载失败
+        open(dest, "wb").write(b"IMG"); return True
+    civitai.enrich_models(conn, fetch=lambda s: ("found", ident), download=dl)
+    assert conn.execute("SELECT image_path FROM civitai").fetchone()["image_path"] == "aaa.jpg"
