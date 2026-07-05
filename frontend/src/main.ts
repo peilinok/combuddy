@@ -10,7 +10,6 @@ import Card from "primevue/card";
 import Knob from "primevue/knob";
 import ProgressBar from "primevue/progressbar";
 import DataView from "primevue/dataview";
-import Tree from "primevue/tree";
 import Tag from "primevue/tag";
 import Image from "primevue/image";
 import Panel from "primevue/panel";
@@ -21,7 +20,7 @@ import InputText from "primevue/inputtext";
 import Button from "primevue/button";
 
 const app = createApp(App).use(PrimeVue).use(i18n);
-for (const [n, c] of Object.entries({ Menu, Card, Knob, ProgressBar, DataView, Tree,
+for (const [n, c] of Object.entries({ Menu, Card, Knob, ProgressBar, DataView,
   Tag, Image, Panel, InputSwitch, Slider, InputNumber, InputText, Button }))
   app.component(n, c as any);
 app.mount("#app");
