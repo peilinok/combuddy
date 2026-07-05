@@ -25,3 +25,9 @@ export const fetchTrash = () => fetch("/api/cleanup/trash").then(jsonOrThrow);
 export const postRestore = (trash_ids: number[]) =>
   fetch("/api/cleanup/restore", { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ trash_ids }) }).then(jsonOrThrow);
+
+export const postScanCancel = () => fetch("/api/scan/cancel", { method: "POST" }).then(jsonOrThrow);
+export const getSettings = () => fetch("/api/settings").then(jsonOrThrow);
+export const setSettings = (s: Record<string, unknown>) =>
+  fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(s) }).then(jsonOrThrow);
