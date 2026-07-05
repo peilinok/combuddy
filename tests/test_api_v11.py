@@ -34,10 +34,12 @@ def test_workflows_and_cleanup_trash_empty(tmp_path):
 
 def test_settings_default_and_update(tmp_path):
     cl = _bare_app(tmp_path)
-    assert cl.get("/api/settings").json() == {"auto_hash": True, "hash_workers": 1, "hash_max_mbps": 0}
-    r = cl.post("/api/settings", json={"auto_hash": False, "hash_workers": 3}).json()
-    assert r == {"auto_hash": False, "hash_workers": 3, "hash_max_mbps": 0}
-    assert cl.get("/api/settings").json()["hash_workers"] == 3
+    assert cl.get("/api/settings").json() == {
+        "auto_hash": True, "hash_workers": 1, "hash_max_mbps": 0,
+        "online_enrich": True, "nsfw_blur_threshold": 1}
+    r = cl.post("/api/settings", json={"auto_hash": False, "online_enrich": False}).json()
+    assert r["auto_hash"] is False and r["online_enrich"] is False
+    assert cl.get("/api/settings").json()["online_enrich"] is False
 
 def test_scan_cancel_sets_flag(tmp_path):
     cl = _bare_app(tmp_path)

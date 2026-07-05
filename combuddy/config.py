@@ -39,11 +39,14 @@ def get_roots(conn: sqlite3.Connection, kind: str | None = None) -> list[sqlite3
 
 def get_settings(conn: sqlite3.Connection) -> dict:
     have = {r["key"]: r["value"] for r in conn.execute(
-        "SELECT key,value FROM meta WHERE key IN ('auto_hash','hash_workers','hash_max_mbps')")}
+        """SELECT key,value FROM meta WHERE key IN
+           ('auto_hash','hash_workers','hash_max_mbps','online_enrich','nsfw_blur_threshold')""")}
     return {
         "auto_hash": have.get("auto_hash", "1") == "1",
         "hash_workers": int(have.get("hash_workers", "1")),
         "hash_max_mbps": int(have.get("hash_max_mbps", "0")),
+        "online_enrich": have.get("online_enrich", "1") == "1",
+        "nsfw_blur_threshold": int(have.get("nsfw_blur_threshold", "1")),
     }
 
 def set_settings(conn: sqlite3.Connection, values: dict) -> None:
@@ -56,4 +59,10 @@ def set_settings(conn: sqlite3.Connection, values: dict) -> None:
     if "hash_max_mbps" in values:
         m = max(0, int(values["hash_max_mbps"]))
         conn.execute("INSERT OR REPLACE INTO meta(key,value) VALUES('hash_max_mbps',?)", (str(m),))
+    if "online_enrich" in values:
+        conn.execute("INSERT OR REPLACE INTO meta(key,value) VALUES('online_enrich',?)",
+                     ("1" if values["online_enrich"] else "0",))
+    if "nsfw_blur_threshold" in values:
+        t = max(0, min(int(values["nsfw_blur_threshold"]), 32))
+        conn.execute("INSERT OR REPLACE INTO meta(key,value) VALUES('nsfw_blur_threshold',?)", (str(t),))
     conn.commit()

@@ -20,13 +20,28 @@ def test_set_and_get_roots(tmp_path):
 
 def test_settings_defaults(tmp_path):
     conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
-    assert config.get_settings(conn) == {"auto_hash": True, "hash_workers": 1, "hash_max_mbps": 0}
+    assert config.get_settings(conn) == {"auto_hash": True, "hash_workers": 1, "hash_max_mbps": 0,
+                                         "online_enrich": True, "nsfw_blur_threshold": 1}
 
 def test_set_settings_partial_and_clamp(tmp_path):
     conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
     config.set_settings(conn, {"auto_hash": False, "hash_workers": 99, "hash_max_mbps": 50})
-    assert config.get_settings(conn) == {"auto_hash": False, "hash_workers": 8, "hash_max_mbps": 50}
+    assert config.get_settings(conn) == {"auto_hash": False, "hash_workers": 8, "hash_max_mbps": 50,
+                                         "online_enrich": True, "nsfw_blur_threshold": 1}
     config.set_settings(conn, {"hash_workers": 0, "hash_max_mbps": -5})
     got = config.get_settings(conn)
     assert got["hash_workers"] == 1 and got["hash_max_mbps"] == 0
     assert got["auto_hash"] is False            # 未在本次 patch 中 → 保持上次
+
+def test_settings_include_civitai_defaults(tmp_path):
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    s = config.get_settings(conn)
+    assert s["online_enrich"] is True and s["nsfw_blur_threshold"] == 1
+
+def test_set_civitai_settings_and_clamp(tmp_path):
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    config.set_settings(conn, {"online_enrich": False, "nsfw_blur_threshold": 99})
+    s = config.get_settings(conn)
+    assert s["online_enrich"] is False and s["nsfw_blur_threshold"] == 32
+    config.set_settings(conn, {"nsfw_blur_threshold": -5})
+    assert config.get_settings(conn)["nsfw_blur_threshold"] == 0
