@@ -9,12 +9,16 @@ license-files = ["LICENSE"]
 authors = [{ name = "peilinok", email = "peilinok@gmail.com" }]
 keywords = ["comfyui", "stable-diffusion", "models", "workflows", "dependency-management"]
 classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Operating System :: OS Independent",
     "Environment :: Web Environment",
     "Framework :: FastAPI",
+    "Topic :: Multimedia :: Graphics",
 ]
 dependencies = ["fastapi>=0.110", "uvicorn[standard]>=0.29"]
 
