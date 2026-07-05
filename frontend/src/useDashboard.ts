@@ -4,10 +4,12 @@ import { fetchStats, postScan, postScanCancel, getSettings, setSettings } from "
 export function useDashboard() {
   const stats = ref<any>({ model_count: 0, total_size: 0, workflow_count: 0,
     base_coverage: { done: 0, total: 0 }, hash_coverage: { hashed: 0, total: 0 },
+    civitai_coverage: { identified: 0, total: 0 },
     unreferenced_count: 0, by_type: [], scanning: false, scan: { phase: "idle" } });
   const loading = ref(false);
   const scanning = ref(false);
-  const settings = ref<any>({ auto_hash: true, hash_workers: 1, hash_max_mbps: 0 });
+  const settings = ref<any>({ auto_hash: true, hash_workers: 1, hash_max_mbps: 0,
+    online_enrich: true, nsfw_blur_threshold: 1 });
   const error = ref<string | null>(null);
   let timer: number | undefined;
 

@@ -34,12 +34,24 @@ def test_workflows_and_cleanup_trash_empty(tmp_path):
 
 def test_settings_default_and_update(tmp_path):
     cl = _bare_app(tmp_path)
-    assert cl.get("/api/settings").json() == {"auto_hash": True, "hash_workers": 1, "hash_max_mbps": 0}
-    r = cl.post("/api/settings", json={"auto_hash": False, "hash_workers": 3}).json()
-    assert r == {"auto_hash": False, "hash_workers": 3, "hash_max_mbps": 0}
-    assert cl.get("/api/settings").json()["hash_workers"] == 3
+    assert cl.get("/api/settings").json() == {
+        "auto_hash": True, "hash_workers": 1, "hash_max_mbps": 0,
+        "online_enrich": True, "nsfw_blur_threshold": 1}
+    r = cl.post("/api/settings", json={"auto_hash": False, "online_enrich": False}).json()
+    assert r["auto_hash"] is False and r["online_enrich"] is False
+    assert cl.get("/api/settings").json()["online_enrich"] is False
 
 def test_scan_cancel_sets_flag(tmp_path):
     cl = _bare_app(tmp_path)
     assert cl.post("/api/scan/cancel").json() == {"ok": True}
     assert scan_service.STATUS["cancel"] is True
+
+def test_preview_endpoint(tmp_path):
+    dbp = str(tmp_path / "c.sqlite")
+    c = db.connect(dbp); db.init_schema(c); c.close()
+    pv = tmp_path / "previews"; pv.mkdir()
+    (pv / ("a" * 64 + ".jpg")).write_bytes(b"IMG")
+    cl = TestClient(api.create_app(dbp))
+    assert cl.get(f"/api/preview/{'a'*64}").content == b"IMG"
+    assert cl.get(f"/api/preview/{'b'*64}").status_code == 404      # 不存在
+    assert cl.get("/api/preview/..%2f..%2fetc").status_code == 404  # 非 hex → 拒绝

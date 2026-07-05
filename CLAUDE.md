@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-combuddy is a standalone, **100% local** tool: it scans a ComfyUI model library and workflow files, maps the model↔workflow dependency graph, and serves a dark web UI (Dashboard, model library, workflow resolution, cleanup). There are **no network calls and no sha256 hashing** by design — model identity is derived only from reading file headers. A single `combuddy` command starts a FastAPI server and opens the browser.
+combuddy is a **local-first** tool: it scans a ComfyUI model library and workflow files, maps the model↔workflow dependency graph, and serves a dark web UI (Dashboard, model library, workflow resolution, cleanup). Model identity (base architecture, precision, parameters) is computed from file headers; content hashes are calculated locally. Optional Civitai enrichment (real names, previews, trigger words) queries by hash only and is default on but toggleable in settings. A single `combuddy` command starts a FastAPI server and opens the browser.
 
 ## Commands
 
@@ -48,7 +48,7 @@ Vue 3, **no vue-router and no Pinia**. `App.vue` switches views with a plain `vi
 
 ## Conventions
 - stdlib `sqlite3` only (no ORM); connections use `sqlite3.Row` — access columns by name, not position.
-- Keep it local: no network calls, no sha256 (both are reserved for a future enrichment layer; `models.sha256` is an unused reserved column).
+- Local-first core: no network calls in the base scan/match/resolve pipeline. Network is confined to the optional, toggleable Civitai enrichment layer (hash-only queries). SHA256 hashing is now computed locally for identity and enrichment.
 - Match the terse, dependency-light style already in each module; each file has one clear responsibility.
 
 ## Design docs

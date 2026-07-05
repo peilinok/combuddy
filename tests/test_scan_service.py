@@ -84,3 +84,33 @@ def test_run_scan_hashing_respects_cancel(tmp_path, monkeypatch):
     scan_service.run_scan(conn)
     assert conn.execute("SELECT sha256 FROM models").fetchone()["sha256"] is None
     assert scan_service.STATUS["running"] is False
+
+def test_run_scan_enriches_when_online_on(tmp_path, monkeypatch):
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    _one_model_root(conn, tmp_path)                          # online_enrich 默认开
+    calls = []
+    monkeypatch.setattr(scan_service.civitai, "enrich_models",
+                        lambda c, **k: calls.append(True) or {"found": 0, "checked": 0, "total": 0})
+    scan_service.run_scan(conn)
+    assert calls == [True] and scan_service.STATUS["running"] is False
+
+def test_run_scan_skips_enrich_when_online_off(tmp_path, monkeypatch):
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    _one_model_root(conn, tmp_path)
+    config.set_settings(conn, {"online_enrich": False})
+    calls = []
+    monkeypatch.setattr(scan_service.civitai, "enrich_models", lambda c, **k: calls.append(True))
+    scan_service.run_scan(conn)
+    assert calls == []
+
+def test_run_scan_enrich_respects_cancel(tmp_path, monkeypatch):
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    _one_model_root(conn, tmp_path)
+    calls = []
+    monkeypatch.setattr(scan_service.civitai, "enrich_models", lambda c, **k: calls.append(True))
+    orig = scan_service.hashes.compute_hashes
+    def _hash_then_cancel(c, **k):
+        r = orig(c, **k); scan_service.STATUS["cancel"] = True; return r
+    monkeypatch.setattr(scan_service.hashes, "compute_hashes", _hash_then_cancel)
+    scan_service.run_scan(conn)
+    assert calls == []                                      # hashing 后置 cancel → enrich 门控跳过

@@ -1,6 +1,6 @@
-import os, threading
+import os, re, threading
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from . import db as dbm, config, stats, scan_service, queries, trash
 
@@ -102,6 +102,15 @@ def create_app(db_path: str, static_dir: str | None = None) -> FastAPI:
     def api_restore(body: dict):
         c = conn(); res = trash.restore(c, body.get("trash_ids", [])); c.close()
         return res
+
+    @app.get("/api/preview/{sha256}")
+    def api_preview(sha256: str):
+        if not re.fullmatch(r"[0-9a-fA-F]{64}", sha256):
+            return JSONResponse({"error": "bad hash"}, status_code=404)
+        path = os.path.join(os.path.dirname(db_path), "previews", sha256 + ".jpg")
+        if not os.path.isfile(path):
+            return JSONResponse({"error": "not found"}, status_code=404)
+        return FileResponse(path, media_type="image/jpeg")
 
     if static_dir and os.path.isdir(static_dir):
         app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")

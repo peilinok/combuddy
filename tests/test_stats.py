@@ -40,3 +40,15 @@ def test_hash_coverage(tmp_path):
                    9,1,{sha},'{i}','{i}',1,1)""")
     conn.commit()
     assert stats.get_stats(conn)["hash_coverage"] == {"hashed": 1, "total": 2}
+
+def test_civitai_coverage(tmp_path):
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    conn.execute("INSERT INTO roots(id,kind,path,enabled) VALUES(1,'model','/r',1)")
+    for i in (1, 2):
+        conn.execute(f"""INSERT INTO models(id,root_id,path,rel_path,dir_type,rel_in_type,filename,ext,
+            size,mtime,match_key,name_key,first_seen,last_scanned)
+            VALUES({i},1,'/r/{i}','{i}','loras','{i}','{i}.safetensors','safetensors',9,1,'{i}','{i}',1,1)""")
+    conn.execute("INSERT INTO civitai(model_id,sha256,found,checked_at) VALUES(1,'x',1,1)")
+    conn.execute("INSERT INTO civitai(model_id,sha256,found,checked_at) VALUES(2,'y',0,1)")
+    conn.commit()
+    assert stats.get_stats(conn)["civitai_coverage"] == {"identified": 1, "total": 2}

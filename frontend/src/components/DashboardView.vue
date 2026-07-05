@@ -15,7 +15,7 @@ onUnmounted(stopPolling);
       <h1 class="text-xl font-semibold">Dashboard</h1>
       <button @click="startScan" :disabled="scanning"
         class="px-4 py-2 rounded-lg bg-[#2ea043] text-white text-sm font-semibold disabled:opacity-50">
-        {{ scanning ? (stats.scan?.phase === 'hashing' ? "计算指纹中…" : "扫描中…") : "扫描 / 刷新" }}
+        {{ scanning ? (stats.scan?.phase === 'hashing' ? "计算指纹中…" : stats.scan?.phase === 'enriching' ? "联网识别中…" : "扫描中…") : "扫描 / 刷新" }}
       </button>
     </div>
     <StatCards :stats="stats" class="mb-4" />
@@ -46,6 +46,28 @@ onUnmounted(stopPolling);
         <span class="text-xs text-[#8a8a93]">{{ stats.scan.hash_done }}/{{ stats.scan.hash_total }}</span>
         <button @click="cancelHash"
           class="px-2 py-1 rounded text-xs bg-[#3d1f1f] text-[#f0883e]">取消</button>
+      </div>
+    </div>
+    <div class="rounded-lg bg-[#17171c] border border-[#26262e] p-4 mb-4">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-sm font-semibold">Civitai 识别</span>
+        <label class="flex items-center gap-2 text-xs text-[#8a8a93] cursor-pointer">
+          <input type="checkbox" :checked="settings.online_enrich"
+            @change="saveSettings({ online_enrich: ($event.target as HTMLInputElement).checked })" />
+          扫描后自动联网识别(仅发送哈希)
+        </label>
+      </div>
+      <div class="text-sm text-[#c8c8ce] mb-2">
+        {{ stats.civitai_coverage?.identified ?? 0 }} / {{ stats.civitai_coverage?.total ?? 0 }} 已识别
+      </div>
+      <label class="flex items-center gap-1 text-xs text-[#8a8a93]">NSFW 模糊阈值
+        <input type="number" min="0" max="32" :value="settings.nsfw_blur_threshold"
+          @change="saveSettings({ nsfw_blur_threshold: +($event.target as HTMLInputElement).value })"
+          class="w-14 px-2 py-1 rounded bg-[#202027] text-[#c8c8ce]" />(越高越少模糊)</label>
+      <div v-if="stats.scan?.phase === 'enriching'" class="mt-3 flex items-center gap-3">
+        <progress class="flex-1 h-2" :value="stats.scan.enrich_done" :max="stats.scan.enrich_total || 1"></progress>
+        <span class="text-xs text-[#8a8a93]">{{ stats.scan.enrich_done }}/{{ stats.scan.enrich_total }}</span>
+        <button @click="cancelHash" class="px-2 py-1 rounded text-xs bg-[#3d1f1f] text-[#f0883e]">取消</button>
       </div>
     </div>
     <TypePanel :byType="stats.by_type" />
