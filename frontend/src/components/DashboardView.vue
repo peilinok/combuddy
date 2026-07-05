@@ -3,9 +3,9 @@ import { onMounted, onUnmounted } from "vue";
 import { useDashboard } from "../useDashboard";
 import StatCards from "./StatCards.vue";
 import TypePanel from "./TypePanel.vue";
-const { stats, scanning, settings, error, startScan, cancelHash, loadSettings,
-  saveSettings, refresh, startPolling, stopPolling } = useDashboard();
-onMounted(async () => { await loadSettings(); await refresh(); startPolling(); });
+const { stats, scanning, error, startScan, cancelHash,
+  refresh, startPolling, stopPolling } = useDashboard();
+onMounted(async () => { await refresh(); startPolling(); });
 onUnmounted(stopPolling);
 </script>
 <template>
@@ -22,24 +22,9 @@ onUnmounted(stopPolling);
     <div class="rounded-lg bg-[#17171c] border border-[#26262e] p-4 mb-4">
       <div class="flex items-center justify-between mb-2">
         <span class="text-sm font-semibold">指纹 (sha256)</span>
-        <label class="flex items-center gap-2 text-xs text-[#8a8a93] cursor-pointer">
-          <input type="checkbox" :checked="settings.auto_hash"
-            @change="saveSettings({ auto_hash: ($event.target as HTMLInputElement).checked })" />
-          扫描后自动计算
-        </label>
       </div>
       <div class="text-sm text-[#c8c8ce] mb-2">
         {{ stats.hash_coverage?.hashed ?? 0 }} / {{ stats.hash_coverage?.total ?? 0 }} 已计算指纹
-      </div>
-      <div class="flex items-center gap-4 text-xs text-[#8a8a93]">
-        <label class="flex items-center gap-1">并发
-          <input type="number" min="1" max="8" :value="settings.hash_workers"
-            @change="saveSettings({ hash_workers: +($event.target as HTMLInputElement).value })"
-            class="w-14 px-2 py-1 rounded bg-[#202027] text-[#c8c8ce]" /></label>
-        <label class="flex items-center gap-1">限速
-          <input type="number" min="0" :value="settings.hash_max_mbps"
-            @change="saveSettings({ hash_max_mbps: +($event.target as HTMLInputElement).value })"
-            class="w-16 px-2 py-1 rounded bg-[#202027] text-[#c8c8ce]" /> MB/s(0=不限)</label>
       </div>
       <div v-if="stats.scan?.phase === 'hashing'" class="mt-3 flex items-center gap-3">
         <progress class="flex-1 h-2" :value="stats.scan.hash_done" :max="stats.scan.hash_total || 1"></progress>
@@ -51,19 +36,10 @@ onUnmounted(stopPolling);
     <div class="rounded-lg bg-[#17171c] border border-[#26262e] p-4 mb-4">
       <div class="flex items-center justify-between mb-2">
         <span class="text-sm font-semibold">Civitai 识别</span>
-        <label class="flex items-center gap-2 text-xs text-[#8a8a93] cursor-pointer">
-          <input type="checkbox" :checked="settings.online_enrich"
-            @change="saveSettings({ online_enrich: ($event.target as HTMLInputElement).checked })" />
-          扫描后自动联网识别(仅发送哈希)
-        </label>
       </div>
       <div class="text-sm text-[#c8c8ce] mb-2">
         {{ stats.civitai_coverage?.identified ?? 0 }} / {{ stats.civitai_coverage?.total ?? 0 }} 已识别
       </div>
-      <label class="flex items-center gap-1 text-xs text-[#8a8a93]">NSFW 模糊阈值
-        <input type="number" min="0" max="32" :value="settings.nsfw_blur_threshold"
-          @change="saveSettings({ nsfw_blur_threshold: +($event.target as HTMLInputElement).value })"
-          class="w-14 px-2 py-1 rounded bg-[#202027] text-[#c8c8ce]" />(越高越少模糊)</label>
       <div v-if="stats.scan?.phase === 'enriching'" class="mt-3 flex items-center gap-3">
         <progress class="flex-1 h-2" :value="stats.scan.enrich_done" :max="stats.scan.enrich_total || 1"></progress>
         <span class="text-xs text-[#8a8a93]">{{ stats.scan.enrich_done }}/{{ stats.scan.enrich_total }}</span>
