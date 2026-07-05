@@ -56,7 +56,7 @@ def scan_model_root(conn: sqlite3.Connection, root_id: int, root_path: str) -> d
             conn.execute(
                 """UPDATE models SET root_id=?, rel_path=?, dir_type=?, rel_in_type=?,
                    filename=?, ext=?, size=?, mtime=?, match_key=?, name_key=?,
-                   base_arch=NULL, base_source=NULL, precision=NULL, last_scanned=? WHERE path=?""",
+                   base_arch=NULL, base_source=NULL, precision=NULL, sha256=NULL, last_scanned=? WHERE path=?""",
                 (root_id, rel, dir_type, rel_in_type, e.name, ext, st.st_size,
                  st.st_mtime, norm.match_key(rel_in_type), norm.match_key(e.name), now, real))
             updated += 1

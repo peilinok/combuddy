@@ -1,5 +1,5 @@
 import os, time
-from combuddy import db, scanner
+from combuddy import db, config, scanner
 
 def _mkfile(p, size=10):
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -48,3 +48,31 @@ def test_scan_uncategorized_file_at_root(tmp_path):
     assert "loose.safetensors" in rows
     assert rows["loose.safetensors"]["dir_type"] == ""
     assert rows["loose.safetensors"]["rel_in_type"] == "loose.safetensors"
+
+def _mroot(tmp_path):
+    mroot = tmp_path / "models" / "checkpoints"; mroot.mkdir(parents=True)
+    return tmp_path / "models", mroot
+
+def _rid(conn):
+    return config.get_roots(conn, "model")[0]["id"]
+
+def test_changed_file_invalidates_sha256(tmp_path):
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    root, mroot = _mroot(tmp_path)
+    f = mroot / "a.safetensors"; f.write_bytes(b"AAAA")
+    config.set_roots(conn, [{"kind": "model", "path": str(root), "source": "manual"}])
+    scanner.scan_model_root(conn, _rid(conn), str(root))
+    conn.execute("UPDATE models SET sha256='deadbeef'"); conn.commit()
+    f.write_bytes(b"BBBBBB")                     # size 4->6，mtime 也变
+    scanner.scan_model_root(conn, _rid(conn), str(root))
+    assert conn.execute("SELECT sha256 FROM models").fetchone()["sha256"] is None
+
+def test_unchanged_file_keeps_sha256(tmp_path):
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    root, mroot = _mroot(tmp_path)
+    (mroot / "a.safetensors").write_bytes(b"AAAA")
+    config.set_roots(conn, [{"kind": "model", "path": str(root), "source": "manual"}])
+    scanner.scan_model_root(conn, _rid(conn), str(root))
+    conn.execute("UPDATE models SET sha256='keepme'"); conn.commit()
+    scanner.scan_model_root(conn, _rid(conn), str(root))   # 文件没动
+    assert conn.execute("SELECT sha256 FROM models").fetchone()["sha256"] == "keepme"

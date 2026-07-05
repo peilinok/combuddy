@@ -1,5 +1,5 @@
 from fastapi.testclient import TestClient
-from combuddy import api, db, queries
+from combuddy import api, db, queries, scan_service
 
 def _app(tmp_path):
     dbp = str(tmp_path / "c.sqlite")
@@ -9,6 +9,11 @@ def _app(tmp_path):
         base_arch,match_key,name_key,first_seen,last_scanned)
         VALUES(1,1,'/r/a','checkpoints/a','checkpoints','a','a.safetensors','safetensors',9,1,'sdxl','a','a',1,1)""")
     c.commit(); c.close()
+    return TestClient(api.create_app(dbp))
+
+def _bare_app(tmp_path):
+    dbp = str(tmp_path / "c.sqlite")
+    c = db.connect(dbp); db.init_schema(c); c.close()
     return TestClient(api.create_app(dbp))
 
 def test_models_and_detail(tmp_path):
@@ -26,3 +31,15 @@ def test_workflows_and_cleanup_trash_empty(tmp_path):
     # model 1 is unreferenced → trashable path returns shape (file missing, so skipped)
     r = cl.post("/api/cleanup/trash", json={"model_ids": [1]})
     assert r.status_code == 200 and "moved" in r.json() and "skipped" in r.json()
+
+def test_settings_default_and_update(tmp_path):
+    cl = _bare_app(tmp_path)
+    assert cl.get("/api/settings").json() == {"auto_hash": True, "hash_workers": 1, "hash_max_mbps": 0}
+    r = cl.post("/api/settings", json={"auto_hash": False, "hash_workers": 3}).json()
+    assert r == {"auto_hash": False, "hash_workers": 3, "hash_max_mbps": 0}
+    assert cl.get("/api/settings").json()["hash_workers"] == 3
+
+def test_scan_cancel_sets_flag(tmp_path):
+    cl = _bare_app(tmp_path)
+    assert cl.post("/api/scan/cancel").json() == {"ok": True}
+    assert scan_service.STATUS["cancel"] is True

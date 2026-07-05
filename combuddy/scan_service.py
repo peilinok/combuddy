@@ -1,8 +1,9 @@
 import os, time, threading, sqlite3
-from . import config, scanner, workflows, resolver, headers
+from . import config, scanner, workflows, resolver, headers, hashes
 
 STATUS = {"running": False, "phase": "idle", "models_found": 0,
-          "bases_done": 0, "workflows_done": 0, "errors": 0}
+          "bases_done": 0, "workflows_done": 0, "errors": 0,
+          "hash_done": 0, "hash_total": 0, "cancel": False}
 _LOCK = threading.Lock()
 
 def run_scan(conn: sqlite3.Connection) -> dict:
@@ -10,7 +11,8 @@ def run_scan(conn: sqlite3.Connection) -> dict:
         if STATUS["running"]:
             return {"skipped": "already running"}
         STATUS.update(running=True, phase="scanning", models_found=0,
-                      bases_done=0, workflows_done=0, errors=0)
+                      bases_done=0, workflows_done=0, errors=0,
+                      hash_done=0, hash_total=0, cancel=False)
     try:
         for root in config.get_roots(conn, "model"):
             scanner.scan_model_root(conn, root["id"], root["path"])
@@ -47,6 +49,14 @@ def run_scan(conn: sqlite3.Connection) -> dict:
         headers.enrich_models(conn)
         STATUS["bases_done"] = conn.execute(
             "SELECT COUNT(*) c FROM models WHERE base_arch IS NOT NULL").fetchone()["c"]
+
+        cfg = config.get_settings(conn)
+        if cfg["auto_hash"] and not STATUS["cancel"]:
+            STATUS["phase"] = "hashing"
+            hashes.compute_hashes(
+                conn, workers=cfg["hash_workers"], max_mbps=cfg["hash_max_mbps"],
+                progress=lambda d, t: STATUS.update(hash_done=d, hash_total=t),
+                should_cancel=lambda: STATUS["cancel"])
         return {"models": STATUS["models_found"], "workflows": STATUS["workflows_done"]}
     finally:
         STATUS.update(running=False, phase="idle")

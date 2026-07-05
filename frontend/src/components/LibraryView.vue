@@ -33,6 +33,9 @@ function setFlag(f: string) { flag.value = flag.value === f ? "" : f; load(); }
           <tr v-if="selected && selected.id === m.id">
             <td colspan="5" class="bg-[#202027] rounded p-3 text-xs">
               <div class="text-[#8a8a93] mb-1">{{ m.dir_type }} · {{ m.label }} · {{ m.precision || '—' }} · {{ humanSize(m.size) }}</div>
+              <div class="text-[#6c6c74] font-mono text-[11px] break-all">
+                sha256 {{ selected.sha256 || '未计算' }}
+              </div>
               <div class="text-[#c8c8ce] font-semibold mt-2">反向依赖 — 被 {{ selected.workflows.length }} 个 workflow 引用</div>
               <div v-for="w in selected.workflows" :key="w.id" class="text-[#c8c8ce]">· {{ w.filename }}</div>
               <div v-if="!selected.workflows.length" class="text-[#f0883e]">没有 workflow 引用它(可清理)</div>
