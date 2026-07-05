@@ -1,0 +1,28 @@
+from fastapi.testclient import TestClient
+from combuddy import api, db, queries
+
+def _app(tmp_path):
+    dbp = str(tmp_path / "c.sqlite")
+    c = db.connect(dbp); db.init_schema(c)
+    c.execute("INSERT INTO roots(id,kind,path,source) VALUES(1,'model','/r','manual')")
+    c.execute("""INSERT INTO models(id,root_id,path,rel_path,dir_type,rel_in_type,filename,ext,size,mtime,
+        base_arch,match_key,name_key,first_seen,last_scanned)
+        VALUES(1,1,'/r/a','checkpoints/a','checkpoints','a','a.safetensors','safetensors',9,1,'sdxl','a','a',1,1)""")
+    c.commit(); c.close()
+    return TestClient(api.create_app(dbp))
+
+def test_models_and_detail(tmp_path):
+    cl = _app(tmp_path)
+    r = cl.get("/api/models"); assert r.status_code == 200
+    assert r.json()["models"][0]["label"] == "sdxl"
+    d = cl.get("/api/models/1").json()
+    assert d["filename"] == "a.safetensors" and "workflows" in d
+    assert cl.get("/api/models/999").status_code == 404
+
+def test_workflows_and_cleanup_trash_empty(tmp_path):
+    cl = _app(tmp_path)
+    assert cl.get("/api/workflows").json()["workflows"] == []
+    assert cl.get("/api/cleanup/trash").json()["trash"] == []
+    # model 1 is unreferenced → trashable path returns shape (file missing, so skipped)
+    r = cl.post("/api/cleanup/trash", json={"model_ids": [1]})
+    assert r.status_code == 200 and "moved" in r.json() and "skipped" in r.json()

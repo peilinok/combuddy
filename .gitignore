@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.egg-info/
+*.pyc
+.pytest_cache/
+.venv/
+build/
+dist/
+
+# combuddy runtime
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# Frontend
+node_modules/
+frontend/dist/
+
+# macOS
+.DS_Store
+
+# local-only (kept on disk, not published)
+docs/
+.claude/launch.json
