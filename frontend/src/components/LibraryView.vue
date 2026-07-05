@@ -4,12 +4,11 @@ import { useLibrary } from "../useLibrary";
 import { humanSize } from "../format";
 import ModelCard from "./ModelCard.vue";
 const { models, selected, search, flag, layout, revealed, lightbox, load, openDetail, error,
-  shouldBlur, reveal, openLightbox, closeLightbox, treeNodes } = useLibrary();
+  shouldBlur, reveal, openLightbox, closeLightbox, typeFilter, collapsed, typeCounts, visibleModels } = useLibrary();
 function onKey(e: KeyboardEvent) { if (e.key === "Escape") closeLightbox(); }
 onMounted(() => { load(); window.addEventListener("keydown", onKey); });
 onUnmounted(() => window.removeEventListener("keydown", onKey));
 function setFlag(f: string) { flag.value = flag.value === f ? "" : f; load(); }
-function onNode(node: any) { node.data && openDetail(node.data.id); }
 </script>
 <template>
   <div>
@@ -29,71 +28,81 @@ function onNode(node: any) { node.data && openDetail(node.data.id); }
           :class="['w-9 h-9 rounded flex items-center justify-center', layout==='list'?'bg-surface-hover text-primary':'bg-surface-card text-color-secondary']">
           <i class="pi pi-bars"></i>
         </button>
-        <button @click="layout = 'folder'" title="文件夹视图"
-          :class="['w-9 h-9 rounded flex items-center justify-center', layout==='folder'?'bg-surface-hover text-primary':'bg-surface-card text-color-secondary']">
-          <i class="pi pi-folder"></i>
-        </button>
       </div>
     </div>
-    <Tree v-if="layout==='folder'" :value="treeNodes" selectionMode="single" @nodeSelect="onNode" />
-    <DataView v-else :value="models" :layout="layout">
-      <template #grid="{ items }">
-        <div class="grid grid-cols-4 gap-3">
-          <ModelCard v-for="m in items" :key="m.id" :m="m"
-            :blur="shouldBlur(m.nsfw_level) && !revealed.has(m.id)"
-            @zoom="openLightbox(m)" @open="openDetail(m.id)" />
+    <div class="flex gap-4">
+      <aside :class="['shrink-0 transition-all', collapsed ? 'w-8' : 'w-48']">
+        <button @click="collapsed = !collapsed" class="text-color-secondary text-xs mb-2 flex items-center gap-1">
+          <i :class="collapsed ? 'pi pi-angle-right' : 'pi pi-angle-left'"></i><span v-if="!collapsed">类型</span>
+        </button>
+        <div v-if="!collapsed">
+          <button @click="typeFilter = ''" :class="['w-full text-left px-2 py-1 rounded text-sm', typeFilter==='' ? 'bg-surface-hover text-primary' : 'text-color-secondary hover:bg-surface-hover']">全部 ({{ models.length }})</button>
+          <button v-for="tc in typeCounts" :key="tc.dir_type" @click="typeFilter = tc.dir_type"
+            :class="['w-full text-left px-2 py-1 rounded text-sm truncate', typeFilter===tc.dir_type ? 'bg-surface-hover text-primary' : 'text-color-secondary hover:bg-surface-hover']">
+            {{ tc.dir_type }} ({{ tc.count }})</button>
         </div>
-      </template>
-      <template #list="{ items }">
-        <table class="w-full text-sm">
-          <thead class="text-color-secondary text-xs"><tr>
-            <th class="text-left font-normal pb-2">名称</th><th class="text-left font-normal">类型</th>
-            <th class="text-left font-normal">标识</th><th class="text-right font-normal">大小</th><th class="text-right font-normal">用量</th>
-          </tr></thead>
-          <tbody>
-            <tr v-for="m in items" :key="m.id" @click="openDetail(m.id)" class="cursor-pointer hover:bg-surface-hover">
-              <td class="py-1.5 text-color">
-                <span class="inline-flex items-center gap-2">
-                  <img v-if="m.has_preview" :src="'/api/preview/' + m.sha256"
-                    :class="['w-7 h-7 rounded object-cover cursor-zoom-in', shouldBlur(m.nsfw_level) && !revealed.has(m.id) ? 'blur-sm' : '']"
-                    @click.stop="openLightbox(m)" />
-                  {{ m.civitai_name || m.display_name || m.filename }}
-                </span>
-              </td>
-              <td class="text-color-secondary">{{ m.dir_type }}</td>
-              <td :class="m.civitai_found || m.label!=='未识别' ? 'text-primary' : 'text-color-secondary'">{{ m.civitai_base || m.label }}</td>
-              <td class="text-right text-color-secondary">{{ humanSize(m.size) }}</td>
-              <td :class="['text-right', m.ref_count ? 'text-color-secondary' : 'text-orange-400 font-semibold']">{{ m.ref_count }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </template>
-      <template #empty>
-        <div class="text-color-secondary text-sm py-6 text-center">没有匹配的模型</div>
-      </template>
-    </DataView>
-    <div v-if="selected" class="bg-surface-card rounded p-3 text-xs mt-4">
-      <div class="text-color-secondary mb-1">{{ selected.dir_type }} · {{ selected.label }} · {{ selected.precision || '—' }} · {{ humanSize(selected.size) }}</div>
-      <div class="text-color-secondary font-mono text-[11px] break-all">
-        sha256 {{ selected.sha256 || '未计算' }}
-      </div>
-      <div v-if="selected.civitai_found" class="mt-2 border-t border-surface-border pt-2">
-        <div class="flex gap-3">
-          <img v-if="selected.has_preview" :src="'/api/preview/' + selected.sha256"
-            :class="['w-24 h-24 rounded object-cover shrink-0 cursor-zoom-in', shouldBlur(selected.nsfw_level) && !revealed.has(selected.id) ? 'blur-md' : '']"
-            @click="openLightbox(selected)" />
-          <div>
-            <div class="text-color font-semibold">{{ selected.civitai_name }}
-              <span class="text-color-secondary font-normal">· {{ selected.civitai_base }} · {{ selected.civitai_type }}</span></div>
-            <div v-if="JSON.parse(selected.trigger_words || '[]').length" class="text-color-secondary mt-1">
-              触发词:<code v-for="t in JSON.parse(selected.trigger_words)" :key="t" class="mr-1 px-1 bg-surface-hover rounded">{{ t }}</code></div>
-            <a :href="selected.civitai_url" target="_blank" class="text-primary text-[11px]">在 Civitai 查看 ↗</a>
+      </aside>
+      <div class="flex-1 min-w-0">
+        <DataView :value="visibleModels" :layout="layout">
+          <template #grid="{ items }">
+            <div class="grid grid-cols-4 gap-3">
+              <ModelCard v-for="m in items" :key="m.id" :m="m"
+                :blur="shouldBlur(m.nsfw_level) && !revealed.has(m.id)"
+                @zoom="openLightbox(m)" @open="openDetail(m.id)" />
+            </div>
+          </template>
+          <template #list="{ items }">
+            <table class="w-full text-sm">
+              <thead class="text-color-secondary text-xs"><tr>
+                <th class="text-left font-normal pb-2">名称</th><th class="text-left font-normal">类型</th>
+                <th class="text-left font-normal">标识</th><th class="text-right font-normal">大小</th><th class="text-right font-normal">用量</th>
+              </tr></thead>
+              <tbody>
+                <tr v-for="m in items" :key="m.id" @click="openDetail(m.id)" class="cursor-pointer hover:bg-surface-hover">
+                  <td class="py-1.5 text-color">
+                    <span class="inline-flex items-center gap-2">
+                      <img v-if="m.has_preview" :src="'/api/preview/' + m.sha256"
+                        :class="['w-7 h-7 rounded object-cover cursor-zoom-in', shouldBlur(m.nsfw_level) && !revealed.has(m.id) ? 'blur-sm' : '']"
+                        @click.stop="openLightbox(m)" />
+                      {{ m.civitai_name || m.display_name || m.filename }}
+                    </span>
+                  </td>
+                  <td class="text-color-secondary">{{ m.dir_type }}</td>
+                  <td :class="m.civitai_found || m.label!=='未识别' ? 'text-primary' : 'text-color-secondary'">{{ m.civitai_base || m.label }}</td>
+                  <td class="text-right text-color-secondary">{{ humanSize(m.size) }}</td>
+                  <td :class="['text-right', m.ref_count ? 'text-color-secondary' : 'text-orange-400 font-semibold']">{{ m.ref_count }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
+          <template #empty>
+            <div class="text-color-secondary text-sm py-6 text-center">没有匹配的模型</div>
+          </template>
+        </DataView>
+        <div v-if="selected" class="bg-surface-card rounded p-3 text-xs mt-4">
+          <div class="text-color-secondary mb-1">{{ selected.dir_type }} · {{ selected.label }} · {{ selected.precision || '—' }} · {{ humanSize(selected.size) }}</div>
+          <div class="text-color-secondary font-mono text-[11px] break-all">
+            sha256 {{ selected.sha256 || '未计算' }}
           </div>
+          <div v-if="selected.civitai_found" class="mt-2 border-t border-surface-border pt-2">
+            <div class="flex gap-3">
+              <img v-if="selected.has_preview" :src="'/api/preview/' + selected.sha256"
+                :class="['w-24 h-24 rounded object-cover shrink-0 cursor-zoom-in', shouldBlur(selected.nsfw_level) && !revealed.has(selected.id) ? 'blur-md' : '']"
+                @click="openLightbox(selected)" />
+              <div>
+                <div class="text-color font-semibold">{{ selected.civitai_name }}
+                  <span class="text-color-secondary font-normal">· {{ selected.civitai_base }} · {{ selected.civitai_type }}</span></div>
+                <div v-if="JSON.parse(selected.trigger_words || '[]').length" class="text-color-secondary mt-1">
+                  触发词:<code v-for="t in JSON.parse(selected.trigger_words)" :key="t" class="mr-1 px-1 bg-surface-hover rounded">{{ t }}</code></div>
+                <a :href="selected.civitai_url" target="_blank" class="text-primary text-[11px]">在 Civitai 查看 ↗</a>
+              </div>
+            </div>
+          </div>
+          <div class="text-color-secondary font-semibold mt-2">反向依赖 — 被 {{ selected.workflows.length }} 个 workflow 引用</div>
+          <div v-for="w in selected.workflows" :key="w.id" class="text-color-secondary">· {{ w.filename }}</div>
+          <div v-if="!selected.workflows.length" class="text-orange-400">没有 workflow 引用它(可清理)</div>
         </div>
       </div>
-      <div class="text-color-secondary font-semibold mt-2">反向依赖 — 被 {{ selected.workflows.length }} 个 workflow 引用</div>
-      <div v-for="w in selected.workflows" :key="w.id" class="text-color-secondary">· {{ w.filename }}</div>
-      <div v-if="!selected.workflows.length" class="text-orange-400">没有 workflow 引用它(可清理)</div>
     </div>
     <div v-if="lightbox" class="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-6 cursor-zoom-out"
       @click="closeLightbox">
