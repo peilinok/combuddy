@@ -15,12 +15,12 @@ async function save() {
 }
 </script>
 <template>
-  <div class="max-w-lg mx-auto mt-20 bg-[#1e1e24] rounded-xl p-6">
-    <div class="text-lg font-semibold text-[#e8e8ea] mb-4">指认你的目录</div>
-    <label class="block text-xs text-[#8a8a93] mb-1">模型目录(如 …/ComfyUI-Shared/models)</label>
-    <input v-model="modelPath" class="w-full mb-4 px-3 py-2 rounded bg-[#16161a] text-[#e8e8ea] text-sm" />
-    <label class="block text-xs text-[#8a8a93] mb-1">workflow 目录(如 …/user/default/workflows)</label>
-    <input v-model="workflowPath" class="w-full mb-4 px-3 py-2 rounded bg-[#16161a] text-[#e8e8ea] text-sm" />
-    <button @click="save" class="px-4 py-2 rounded-lg bg-[#2ea043] text-white text-sm font-semibold">保存并扫描</button>
+  <div class="max-w-lg mx-auto mt-20 bg-surface-card rounded-xl p-6">
+    <div class="text-lg font-semibold text-color mb-4">指认你的目录</div>
+    <label class="block text-xs text-color-secondary mb-1">模型目录(如 …/ComfyUI-Shared/models)</label>
+    <input v-model="modelPath" class="w-full mb-4 px-3 py-2 rounded bg-surface-hover text-color text-sm" />
+    <label class="block text-xs text-color-secondary mb-1">workflow 目录(如 …/user/default/workflows)</label>
+    <input v-model="workflowPath" class="w-full mb-4 px-3 py-2 rounded bg-surface-hover text-color text-sm" />
+    <button @click="save" class="px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold">保存并扫描</button>
   </div>
 </template>
