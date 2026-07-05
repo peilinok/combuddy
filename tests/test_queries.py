@@ -47,3 +47,31 @@ def test_workflow_resolution_ambiguous(tmp_path):
     r = queries.get_workflow_resolution(conn, 1)
     st = {e["ref_string"]: e["status"] for e in r["edges"]}
     assert st["dup.safetensors"] == "ambiguous"
+
+def _one(conn, base_arch=None):
+    conn.execute("INSERT INTO roots(id,kind,path,enabled) VALUES(1,'model','/r',1)")
+    conn.execute(f"""INSERT INTO models(id,root_id,path,rel_path,dir_type,rel_in_type,filename,ext,
+        size,mtime,base_arch,match_key,name_key,first_seen,last_scanned)
+        VALUES(1,1,'/r/a','a','loras','a','a.safetensors','safetensors',9,1,{'NULL' if base_arch is None else repr(base_arch)},'a','a',1,1)""")
+    conn.commit()
+
+def test_list_models_brings_civitai_fields(tmp_path):
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn); _one(conn)
+    conn.execute("""INSERT INTO civitai(model_id,sha256,found,name,base_model,model_type,image_path,checked_at)
+        VALUES(1,'x',1,'Real Name','SDXL','LORA','x.jpg',1)"""); conn.commit()
+    m = queries.list_models(conn)[0]
+    assert m["civitai_found"] == 1 and m["civitai_name"] == "Real Name"
+    assert m["civitai_base"] == "SDXL" and m["has_preview"] == 1
+
+def test_unknown_flag_excludes_civitai_identified(tmp_path):
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn); _one(conn)  # base_arch NULL → label 未识别
+    conn.execute("INSERT INTO civitai(model_id,sha256,found,name,checked_at) VALUES(1,'x',1,'R',1)")
+    conn.commit()
+    assert queries.list_models(conn, flag="unknown") == []      # Civitai 认出 → 不算未识别
+
+def test_detail_brings_civitai(tmp_path):
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn); _one(conn)
+    conn.execute("""INSERT INTO civitai(model_id,sha256,found,name,trigger_words,civitai_url,checked_at)
+        VALUES(1,'x',1,'R','[\"t\"]','http://c/1',1)"""); conn.commit()
+    d = queries.get_model_detail(conn, 1)
+    assert d["civitai_name"] == "R" and d["civitai_url"] == "http://c/1"

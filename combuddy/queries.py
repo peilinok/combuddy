@@ -1,12 +1,15 @@
 from . import roles
 
 def list_models(conn, search="", type_filter="", flag=""):
-    sql = """SELECT m.*, (SELECT COUNT(DISTINCT workflow_id) FROM edges e WHERE e.model_id=m.id) ref_count
-             FROM models m WHERE 1=1"""
+    sql = """SELECT m.*, (SELECT COUNT(DISTINCT workflow_id) FROM edges e WHERE e.model_id=m.id) ref_count,
+                    c.found civitai_found, c.name civitai_name, c.base_model civitai_base,
+                    c.model_type civitai_type, c.trigger_words, c.nsfw_level, c.civitai_url,
+                    (c.image_path IS NOT NULL) has_preview
+             FROM models m LEFT JOIN civitai c ON c.model_id=m.id WHERE 1=1"""
     args = []
     if search:
-        sql += " AND (m.filename LIKE ? OR m.display_name LIKE ?)"
-        args += [f"%{search}%", f"%{search}%"]
+        sql += " AND (m.filename LIKE ? OR m.display_name LIKE ? OR c.name LIKE ?)"
+        args += [f"%{search}%", f"%{search}%", f"%{search}%"]
     if type_filter:
         sql += " AND m.dir_type=?"; args.append(type_filter)
     sql += " ORDER BY m.size DESC"
@@ -16,13 +19,17 @@ def list_models(conn, search="", type_filter="", flag=""):
         d["label"] = roles.label_for(r["base_arch"], r["dir_type"])
         if flag == "unreferenced" and d["ref_count"] > 0:
             continue
-        if flag == "unknown" and d["label"] != "未识别":
+        if flag == "unknown" and (d["label"] != "未识别" or d["civitai_found"]):
             continue
         out.append(d)
     return out
 
 def get_model_detail(conn, model_id):
-    r = conn.execute("SELECT * FROM models WHERE id=?", (model_id,)).fetchone()
+    r = conn.execute(
+        """SELECT m.*, c.found civitai_found, c.name civitai_name, c.version_name civitai_version,
+                  c.base_model civitai_base, c.model_type civitai_type, c.trigger_words,
+                  c.nsfw_level, c.civitai_url, (c.image_path IS NOT NULL) has_preview
+           FROM models m LEFT JOIN civitai c ON c.model_id=m.id WHERE m.id=?""", (model_id,)).fetchone()
     if not r:
         return None
     d = dict(r)

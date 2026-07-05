@@ -45,3 +45,13 @@ def test_scan_cancel_sets_flag(tmp_path):
     cl = _bare_app(tmp_path)
     assert cl.post("/api/scan/cancel").json() == {"ok": True}
     assert scan_service.STATUS["cancel"] is True
+
+def test_preview_endpoint(tmp_path):
+    dbp = str(tmp_path / "c.sqlite")
+    c = db.connect(dbp); db.init_schema(c); c.close()
+    pv = tmp_path / "previews"; pv.mkdir()
+    (pv / ("a" * 64 + ".jpg")).write_bytes(b"IMG")
+    cl = TestClient(api.create_app(dbp))
+    assert cl.get(f"/api/preview/{'a'*64}").content == b"IMG"
+    assert cl.get(f"/api/preview/{'b'*64}").status_code == 404      # 不存在
+    assert cl.get("/api/preview/..%2f..%2fetc").status_code == 404  # 非 hex → 拒绝
