@@ -14,6 +14,7 @@ Community workflows reference models by bare filename — no download link, no h
 - **Workflow resolution** — pick a workflow, see each referenced model marked **hit / ambiguous / missing**.
 - **Cleanup** — the models no workflow uses, with reclaimable space, moved to a **recoverable trash** (never a hard delete; only 0-reference models can go).
 - **Offline identity** — base architecture (SD1.5/SDXL/Flux/…, incl. GGUF), role labels (text encoder, VAE, ControlNet, …), and precision, all read straight from file headers.
+- **Civitai identity** — for models found on Civitai by content hash: real name, base model, trigger words, and a cached preview thumbnail with **HD zoom**. Enrichment sends **only the hash**, is on by default, and is toggleable in settings.
 
 ## Install & run
 
