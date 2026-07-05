@@ -10,6 +10,12 @@ export default {
     roots: "根目录", pathPlaceholder: "目录绝对路径", add: "添加",
   },
   theme: { palette: "配色", mode: "明暗", modeAuto: "跟随系统", modeLight: "亮", modeDark: "暗" },
+  roles: {
+    textEncoder: "文本编码器", vae: "VAE", controlnet: "ControlNet", clipVision: "CLIP Vision",
+    upscale: "放大模型", embedding: "Embedding", modelPatch: "模型补丁", styleModel: "风格模型",
+    insightface: "InsightFace", sam: "SAM", detection: "检测模型", faceRestore: "面部修复", vaeApprox: "VAE 近似",
+  },
+  label: { unknown: "未识别" },
   dashboard: {
     title: "Dashboard", scan: "扫描 / 刷新", scanning: "扫描中…", hashing: "计算指纹中…", enriching: "联网识别中…",
     cancel: "取消",

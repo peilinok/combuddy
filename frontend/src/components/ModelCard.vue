@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
 import { humanSize } from "../format";
+import { displayLabel, isIdentified } from "../labels";
 const { t } = useI18n();
 defineProps<{ m: any; blur: boolean }>();
 defineEmits<{ (e: "zoom"): void; (e: "open"): void }>();
@@ -15,7 +16,7 @@ defineEmits<{ (e: "zoom"): void; (e: "open"): void }>();
     <div class="text-sm text-color truncate">{{ m.civitai_name || m.display_name || m.filename }}</div>
     <div class="flex items-center gap-1 mt-1 flex-wrap">
       <Tag :value="m.dir_type" severity="secondary" />
-      <Tag v-if="m.civitai_base || m.label !== '未识别'" :value="m.civitai_base || m.label" />
+      <Tag v-if="isIdentified(m)" :value="displayLabel(m, t)" />
     </div>
     <div class="text-xs text-color-secondary mt-1">{{ humanSize(m.size) }} · {{ t("card.refCount", { n: m.ref_count }) }}</div>
   </div>

@@ -10,6 +10,12 @@ export default {
     roots: "Root Directories", pathPlaceholder: "Absolute directory path", add: "Add",
   },
   theme: { palette: "Palette", mode: "Mode", modeAuto: "Follow system", modeLight: "Light", modeDark: "Dark" },
+  roles: {
+    textEncoder: "Text Encoder", vae: "VAE", controlnet: "ControlNet", clipVision: "CLIP Vision",
+    upscale: "Upscaler", embedding: "Embedding", modelPatch: "Model Patch", styleModel: "Style Model",
+    insightface: "InsightFace", sam: "SAM", detection: "Detector", faceRestore: "Face Restore", vaeApprox: "VAE Approx",
+  },
+  label: { unknown: "Unknown" },
   dashboard: {
     title: "Dashboard", scan: "Scan / Refresh", scanning: "Scanning…", hashing: "Computing hashes…", enriching: "Identifying online…",
     cancel: "Cancel",

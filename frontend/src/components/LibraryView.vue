@@ -3,6 +3,7 @@ import { onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useLibrary } from "../useLibrary";
 import { humanSize } from "../format";
+import { displayLabel, isIdentified } from "../labels";
 import ModelCard from "./ModelCard.vue";
 const { t } = useI18n();
 const { models, selected, search, flag, layout, revealed, lightbox, load, openDetail, error,
@@ -70,7 +71,7 @@ function setFlag(f: string) { flag.value = flag.value === f ? "" : f; load(); }
                     </span>
                   </td>
                   <td class="text-color-secondary">{{ m.dir_type }}</td>
-                  <td :class="m.civitai_found || m.label!=='未识别' ? 'text-primary' : 'text-color-secondary'">{{ m.civitai_base || m.label }}</td>
+                  <td :class="isIdentified(m) ? 'text-primary' : 'text-color-secondary'">{{ displayLabel(m, t) }}</td>
                   <td class="text-right text-color-secondary">{{ humanSize(m.size) }}</td>
                   <td :class="['text-right', m.ref_count ? 'text-color-secondary' : 'text-orange-400 font-semibold']">{{ m.ref_count }}</td>
                 </tr>
@@ -82,7 +83,7 @@ function setFlag(f: string) { flag.value = flag.value === f ? "" : f; load(); }
           </template>
         </DataView>
         <div v-if="selected" class="bg-surface-card rounded p-3 text-xs mt-4">
-          <div class="text-color-secondary mb-1">{{ selected.dir_type }} · {{ selected.label }} · {{ selected.precision || '—' }} · {{ humanSize(selected.size) }}</div>
+          <div class="text-color-secondary mb-1">{{ selected.dir_type }} · {{ displayLabel(selected, t) }} · {{ selected.precision || '—' }} · {{ humanSize(selected.size) }}</div>
           <div class="text-color-secondary font-mono text-[11px] break-all">
             {{ t("library.sha256") }} {{ selected.sha256 || t("library.notHashed") }}
           </div>
