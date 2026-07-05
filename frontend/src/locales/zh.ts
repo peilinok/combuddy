@@ -1,5 +1,40 @@
 export default {
   nav: { dashboard: "Dashboard", library: "模型库", workflows: "Workflow", cleanup: "清理中心", settings: "设置" },
   common: { subtitle: "模型与依赖管家" },
-  settings: { title: "设置", appearance: "外观", language: "语言", langZh: "中文", langEn: "English" },
+  settings: {
+    title: "设置", appearance: "外观", language: "语言", langZh: "中文", langEn: "English",
+    scanHash: "扫描 & 哈希", autoHash: "扫描后自动计算 sha256", hashWorkers: "哈希并发",
+    maxMbps: "限速 MB/s(0=不限)",
+    civitaiEnrich: "Civitai 富化", onlineEnrich: "扫描后自动联网识别(仅发送哈希)",
+    nsfwThreshold: "NSFW 模糊阈值(越高越少模糊)",
+    roots: "根目录", pathPlaceholder: "目录绝对路径", add: "添加",
+  },
+  theme: { palette: "配色", mode: "明暗", modeAuto: "跟随系统", modeLight: "亮", modeDark: "暗" },
+  dashboard: {
+    title: "Dashboard", scan: "扫描 / 刷新", scanning: "扫描中…", hashing: "计算指纹中…", enriching: "联网识别中…",
+    cancel: "取消",
+    phaseScanning: "扫描中…", phaseWorkflows: "解析工作流中…", phaseBases: "读头中…",
+    phaseHashing: "计算指纹中…", phaseEnriching: "联网识别中…",
+    models: "模型", workflows: "工作流", totalSize: "总大小", unreferenced: "未被引用", cleanable: "可清理",
+    baseCoverage: "base 识别", hashCoverage: "sha256 指纹", civitaiCoverage: "Civitai 识别",
+    byType: "按类型占用",
+  },
+  library: {
+    title: "模型库", search: "搜索名称…", unknown: "未识别", unreferenced: "未被引用",
+    gridView: "网格视图", listView: "列表视图", type: "类型", all: "全部",
+    colName: "名称", colType: "类型", colLabel: "标识", colSize: "大小", colUsage: "用量",
+    empty: "没有匹配的模型", sha256: "sha256", notHashed: "未计算",
+    triggerWords: "触发词:", viewOnCivitai: "在 Civitai 查看 ↗",
+    refBy: "反向依赖 — 被 {n} 个 workflow 引用", noRef: "没有 workflow 引用它(可清理)",
+  },
+  card: { refCount: "引用 {n}" },
+  workflow: { title: "Workflow 对应", hitMiss: "命中 {hit} · 缺失 {miss}", summary: "命中 {hit} · 歧义 {ambiguous} · 缺失 {miss}" },
+  cleanup: {
+    title: "清理中心", unreferencedModels: "未被引用的模型", countUnused: "{n} 个 · 没有任何 workflow 使用它们",
+    reclaimable: "可回收", selectedSummary: "已选 {n} 项 · {size} · 均 0 引用,可安全移除", moveToTrash: "移至回收站",
+  },
+  setup: {
+    title: "指认你的目录", modelDir: "模型目录(如 …/ComfyUI-Shared/models)",
+    workflowDir: "workflow 目录(如 …/user/default/workflows)", saveAndScan: "保存并扫描",
+  },
 };

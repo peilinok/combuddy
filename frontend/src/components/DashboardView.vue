@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from "vue";
+import { useI18n } from "vue-i18n";
 import { useDashboard } from "../useDashboard";
 import { humanSize } from "../format";
+const { t } = useI18n();
 const { stats, scanning, error, startScan, cancelHash,
   refresh, startPolling, stopPolling } = useDashboard();
 onMounted(async () => { await refresh(); startPolling(); });
@@ -13,9 +15,9 @@ const byTypeRows = computed(() => {
   return rows.sort((a, b) => b.size - a.size).map((r) => ({ ...r, pct: Math.round((100 * r.size) / max) }));
 });
 
-const PHASE_LABELS: Record<string, string> = { scanning: "扫描中…", workflows: "解析工作流中…", bases: "读头中…",
-  hashing: "计算指纹中…", enriching: "联网识别中…" };
-const phaseLabel = computed(() => PHASE_LABELS[stats.value.scan?.phase] ?? "扫描中…");
+const PHASE_LABELS: Record<string, string> = { scanning: "dashboard.phaseScanning", workflows: "dashboard.phaseWorkflows",
+  bases: "dashboard.phaseBases", hashing: "dashboard.phaseHashing", enriching: "dashboard.phaseEnriching" };
+const phaseLabel = computed(() => t(PHASE_LABELS[stats.value.scan?.phase] ?? "dashboard.phaseScanning"));
 const phaseDone = computed(() => {
   const p = stats.value.scan?.phase;
   if (p === "hashing") return stats.value.scan?.hash_done ?? 0;
@@ -30,35 +32,35 @@ const phaseTotal = computed(() => {
 });
 
 const tiles = computed(() => [
-  { label: "模型", icon: "pi pi-images", value: stats.value.model_count, sub: humanSize(stats.value.total_size) },
-  { label: "工作流", icon: "pi pi-sitemap", value: stats.value.workflow_count },
-  { label: "总大小", icon: "pi pi-database", value: humanSize(stats.value.total_size) },
-  { label: "未被引用", icon: "pi pi-exclamation-triangle", value: stats.value.unreferenced_count, sub: "可清理", warn: true },
+  { label: t("dashboard.models"), icon: "pi pi-images", value: stats.value.model_count, sub: humanSize(stats.value.total_size) },
+  { label: t("dashboard.workflows"), icon: "pi pi-sitemap", value: stats.value.workflow_count },
+  { label: t("dashboard.totalSize"), icon: "pi pi-database", value: humanSize(stats.value.total_size) },
+  { label: t("dashboard.unreferenced"), icon: "pi pi-exclamation-triangle", value: stats.value.unreferenced_count, sub: t("dashboard.cleanable"), warn: true },
 ]);
 
 function cov(c: any, key: string) { const done = c?.[key] ?? 0, total = c?.total ?? 0;
   return { done, total, pct: total ? Math.round(100 * done / total) : 0 }; }
 const knobs = computed(() => [
-  { label: "base 识别", ...cov(stats.value.base_coverage, "done") },
-  { label: "sha256 指纹", ...cov(stats.value.hash_coverage, "hashed") },
-  { label: "Civitai 识别", ...cov(stats.value.civitai_coverage, "identified") },
+  { label: t("dashboard.baseCoverage"), ...cov(stats.value.base_coverage, "done") },
+  { label: t("dashboard.hashCoverage"), ...cov(stats.value.hash_coverage, "hashed") },
+  { label: t("dashboard.civitaiCoverage"), ...cov(stats.value.civitai_coverage, "identified") },
 ]);
 </script>
 <template>
   <div>
     <div v-if="error" class="text-orange-400 text-sm mb-3">{{ error }}</div>
     <div class="flex items-center justify-between mb-5">
-      <h1 class="text-xl font-semibold">Dashboard</h1>
+      <h1 class="text-xl font-semibold">{{ t("dashboard.title") }}</h1>
       <button @click="startScan" :disabled="scanning"
         class="px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold disabled:opacity-50">
-        {{ scanning ? (stats.scan?.phase === 'hashing' ? "计算指纹中…" : stats.scan?.phase === 'enriching' ? "联网识别中…" : "扫描中…") : "扫描 / 刷新" }}
+        {{ scanning ? (stats.scan?.phase === 'hashing' ? t("dashboard.hashing") : stats.scan?.phase === 'enriching' ? t("dashboard.enriching") : t("dashboard.scanning")) : t("dashboard.scan") }}
       </button>
     </div>
     <div v-if="scanning" class="mb-4">
       <div class="text-sm text-color-secondary mb-1">{{ phaseLabel }}</div>
       <ProgressBar v-if="phaseTotal" :value="Math.round(100 * phaseDone / phaseTotal)" />
       <ProgressBar v-else mode="indeterminate" style="height:.5rem" />
-      <Button label="取消" text @click="cancelHash" class="mt-2" v-if="stats.scan?.phase==='hashing' || stats.scan?.phase==='enriching'" />
+      <Button :label="t('dashboard.cancel')" text @click="cancelHash" class="mt-2" v-if="stats.scan?.phase==='hashing' || stats.scan?.phase==='enriching'" />
     </div>
     <div class="grid grid-cols-4 gap-3 mb-4">
       <Card v-for="s in tiles" :key="s.label"><template #content>
@@ -76,7 +78,7 @@ const knobs = computed(() => [
           <div class="text-xs text-color-secondary">{{ k.done }}/{{ k.total }}</div>
         </div></template></Card>
     </div>
-    <Card class="mb-4"><template #title>按类型占用</template><template #content>
+    <Card class="mb-4"><template #title>{{ t("dashboard.byType") }}</template><template #content>
       <div v-for="row in byTypeRows" :key="row.dir_type" class="flex items-center gap-3 mb-2">
         <div class="w-40 shrink-0 text-sm text-color-secondary truncate">{{ row.dir_type }}</div>
         <div class="flex-1 h-2.5 rounded-full bg-surface-hover overflow-hidden">

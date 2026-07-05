@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
 import { humanSize } from "../format";
+const { t } = useI18n();
 defineProps<{ m: any; blur: boolean }>();
 defineEmits<{ (e: "zoom"): void; (e: "open"): void }>();
 </script>
@@ -15,6 +17,6 @@ defineEmits<{ (e: "zoom"): void; (e: "open"): void }>();
       <Tag :value="m.dir_type" severity="secondary" />
       <Tag v-if="m.civitai_base || m.label !== '未识别'" :value="m.civitai_base || m.label" />
     </div>
-    <div class="text-xs text-color-secondary mt-1">{{ humanSize(m.size) }} · 引用 {{ m.ref_count }}</div>
+    <div class="text-xs text-color-secondary mt-1">{{ humanSize(m.size) }} · {{ t("card.refCount", { n: m.ref_count }) }}</div>
   </div>
 </template>
