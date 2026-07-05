@@ -10,7 +10,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "chart.js": "^4.5.1",
     "primeicons": "^7.0.0",
     "primevue": "^3.50",
     "vue": "^3.4"

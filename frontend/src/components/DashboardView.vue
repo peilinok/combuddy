@@ -7,16 +7,11 @@ const { stats, scanning, error, startScan, cancelHash,
 onMounted(async () => { await refresh(); startPolling(); });
 onUnmounted(stopPolling);
 
-const PALETTE_RING = ["#2ea043", "#3b82f6", "#a855f7", "#f59e0b", "#06b6d4", "#ef4444", "#8a8a93"];
-function getVar(name: string) { return getComputedStyle(document.documentElement).getPropertyValue(name); }
-
-const typeChart = computed(() => ({
-  labels: (stats.value.by_type ?? []).map((t: any) => t.dir_type),
-  datasets: [{ data: (stats.value.by_type ?? []).map((t: any) => t.size),
-    backgroundColor: (stats.value.by_type ?? []).map((_: any, i: number) => PALETTE_RING[i % PALETTE_RING.length]) }],
-}));
-const chartOpts = { plugins: { legend: { position: "right", labels: { color: getVar("--text-color-secondary") } } },
-  cutout: "62%" };
+const byTypeRows = computed(() => {
+  const rows = (stats.value.by_type ?? []).map((t: any) => ({ dir_type: t.dir_type, size: t.size }));
+  const max = Math.max(1, ...rows.map((r) => r.size));
+  return rows.sort((a, b) => b.size - a.size).map((r) => ({ ...r, pct: Math.round((100 * r.size) / max) }));
+});
 
 const PHASE_LABELS: Record<string, string> = { scanning: "扫描中…", workflows: "解析工作流中…", bases: "读头中…",
   hashing: "计算指纹中…", enriching: "联网识别中…" };
@@ -82,7 +77,13 @@ const knobs = computed(() => [
         </div></template></Card>
     </div>
     <Card class="mb-4"><template #title>按类型占用</template><template #content>
-      <Chart type="doughnut" :data="typeChart" :options="chartOpts" class="max-h-72" />
+      <div v-for="row in byTypeRows" :key="row.dir_type" class="flex items-center gap-3 mb-2">
+        <div class="w-40 shrink-0 text-sm text-color-secondary truncate">{{ row.dir_type }}</div>
+        <div class="flex-1 h-2.5 rounded-full bg-surface-hover overflow-hidden">
+          <div class="h-full rounded-full bg-primary" :style="{ width: row.pct + '%' }"></div>
+        </div>
+        <div class="w-20 text-right text-xs text-color-secondary">{{ humanSize(row.size) }}</div>
+      </div>
     </template></Card>
   </div>
 </template>
