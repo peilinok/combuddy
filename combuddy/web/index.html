@@ -7,12 +7,13 @@
   var palette = PAL.indexOf(s.palette) >= 0 ? s.palette : "green";
   var mode = MOD.indexOf(s.mode) >= 0 ? s.mode : "auto";
   var resolved = mode === "auto" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : mode;
+  document.documentElement.style.background = resolved === "dark" ? "#0a0a0a" : "#ffffff";
   var l = document.createElement("link");
   l.id = "theme-link"; l.rel = "stylesheet"; l.href = "/themes/aura-" + resolved + "-" + palette + ".css";
   document.head.appendChild(l);
 })();
 </script>
-  <script type="module" crossorigin src="/assets/index-Cck8i8zf.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-DxjeBEHM.css">
+  <script type="module" crossorigin src="/assets/index-BfMn4U-q.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-CjieEKXu.css">
 </head>
-<body class="bg-[#16161a]"><div id="app"></div></body></html>
+<body><div id="app"></div></body></html>
