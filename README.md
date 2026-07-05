@@ -3,7 +3,7 @@
 [![CI](https://github.com/peilinok/combuddy/actions/workflows/ci.yml/badge.svg)](https://github.com/peilinok/combuddy/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A model & workflow dependency manager for [ComfyUI](https://github.com/comfyanonymous/ComfyUI). Point it at your local model library and workflow files, and it shows you how they depend on each other — which workflows use which models, which models nothing uses, and which models a workflow is missing. **100% local: no network, no accounts, no hashing.**
+A model & workflow dependency manager for [ComfyUI](https://github.com/comfyanonymous/ComfyUI). Point it at your local model library and workflow files, and it shows you how they depend on each other — which workflows use which models, which models nothing uses, and which models a workflow is missing. **Local-first**: model identity (base architecture, precision, parameters) is computed from file headers; optional Civitai enrichment by content hash is on by default and toggleable in settings.
 
 ## Why
 
@@ -30,7 +30,7 @@ This starts a local server on `http://127.0.0.1:8511` and opens your browser. On
 
 - Scans model directories (skipping noise and its own trash), and parses ComfyUI workflow JSON for model references.
 - Matches references to local files by **directory type + normalized relative path** (handling subfolders, case, Unicode, and backslashes) — not by fragile basename guessing.
-- Reads only file headers for identity — no full-file hashing, no uploads.
+- Computes content hashes for identity; optional Civitai enrichment sends only the hash to look up real names and metadata.
 - Stores everything in a single local SQLite index; the UI reads it live.
 
 ## Tech stack
@@ -55,4 +55,4 @@ After changing anything in `frontend/src`, run `npm run build` — the packaged 
 
 ## Status & roadmap
 
-v1.1 — fully local. Planned next: online enrichment (real names / preview / trigger words via Civitai by content hash), a download center for missing models, and dependency pinning for shareable, self-healing workflows.
+v1.2 — local-first with optional Civitai enrichment (real names, preview images, trigger words by content hash, default on and toggleable). Planned next: download center for missing models, and dependency pinning for shareable, self-healing workflows.
