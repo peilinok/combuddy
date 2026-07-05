@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { useSettings } from "../useSettings";
+import { setLocale } from "../i18n";
 import ThemePicker from "./ThemePicker.vue";
+const { t, locale } = useI18n();
 const { settings, roots, error, load, save, addRoot } = useSettings();
 const newKind = ref("model");
 const newPath = ref("");
@@ -9,9 +12,20 @@ onMounted(load);
 </script>
 <template>
   <div class="max-w-2xl">
-    <h1 class="text-xl font-semibold mb-4">设置</h1>
+    <h1 class="text-xl font-semibold mb-4">{{ t("settings.title") }}</h1>
     <div v-if="error" class="text-orange-400 text-sm mb-3">{{ error }}</div>
-    <Panel header="外观" class="mb-4"><ThemePicker /></Panel>
+    <Panel :header="t('settings.appearance')" class="mb-4">
+      <ThemePicker />
+      <div class="text-sm text-color-secondary mb-2 mt-4">{{ t("settings.language") }}</div>
+      <div class="flex gap-2">
+        <button @click="setLocale('zh')"
+          :class="['px-3 py-1.5 rounded text-sm', locale === 'zh' ? 'bg-primary text-white' : 'bg-surface-hover text-color-secondary']">
+          {{ t("settings.langZh") }}</button>
+        <button @click="setLocale('en')"
+          :class="['px-3 py-1.5 rounded text-sm', locale === 'en' ? 'bg-primary text-white' : 'bg-surface-hover text-color-secondary']">
+          {{ t("settings.langEn") }}</button>
+      </div>
+    </Panel>
     <Panel header="扫描 & 哈希" class="mb-4">
       <div class="flex items-center justify-between mb-3">
         <span>扫描后自动计算 sha256</span>
