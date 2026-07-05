@@ -49,6 +49,21 @@ def create_app(db_path: str, static_dir: str | None = None) -> FastAPI:
         threading.Thread(target=_bg, daemon=True).start()
         return {"started": True}
 
+    @app.post("/api/scan/cancel")
+    def post_scan_cancel():
+        scan_service.STATUS["cancel"] = True
+        return {"ok": True}
+
+    @app.get("/api/settings")
+    def get_settings():
+        c = conn(); s = config.get_settings(c); c.close()
+        return s
+
+    @app.post("/api/settings")
+    def post_settings(body: dict):
+        c = conn(); config.set_settings(c, body or {}); s = config.get_settings(c); c.close()
+        return s
+
     @app.get("/api/models")
     def api_models(search: str = "", type: str = "", flag: str = ""):
         c = conn(); rows = queries.list_models(c, search, type, flag); c.close()
