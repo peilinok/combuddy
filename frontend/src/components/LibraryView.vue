@@ -4,11 +4,12 @@ import { useLibrary } from "../useLibrary";
 import { humanSize } from "../format";
 import ModelCard from "./ModelCard.vue";
 const { models, selected, search, flag, layout, revealed, lightbox, load, openDetail, error,
-  shouldBlur, reveal, openLightbox, closeLightbox } = useLibrary();
+  shouldBlur, reveal, openLightbox, closeLightbox, treeNodes } = useLibrary();
 function onKey(e: KeyboardEvent) { if (e.key === "Escape") closeLightbox(); }
 onMounted(() => { load(); window.addEventListener("keydown", onKey); });
 onUnmounted(() => window.removeEventListener("keydown", onKey));
 function setFlag(f: string) { flag.value = flag.value === f ? "" : f; load(); }
+function onNode(node: any) { node.data && openDetail(node.data.id); }
 </script>
 <template>
   <div>
@@ -28,9 +29,14 @@ function setFlag(f: string) { flag.value = flag.value === f ? "" : f; load(); }
           :class="['w-9 h-9 rounded flex items-center justify-center', layout==='list'?'bg-surface-hover text-primary':'bg-surface-card text-color-secondary']">
           <i class="pi pi-bars"></i>
         </button>
+        <button @click="layout = 'folder'" title="文件夹视图"
+          :class="['w-9 h-9 rounded flex items-center justify-center', layout==='folder'?'bg-surface-hover text-primary':'bg-surface-card text-color-secondary']">
+          <i class="pi pi-folder"></i>
+        </button>
       </div>
     </div>
-    <DataView :value="models" :layout="layout">
+    <Tree v-if="layout==='folder'" :value="treeNodes" selectionMode="single" @nodeSelect="onNode" />
+    <DataView v-else :value="models" :layout="layout">
       <template #grid="{ items }">
         <div class="grid grid-cols-4 gap-3">
           <ModelCard v-for="m in items" :key="m.id" :m="m"

@@ -40,4 +40,17 @@ describe("useLibrary", () => {
     const lib = useLibrary();
     expect(lib.layout.value).toBe("grid");
   });
+  it("treeNodes 按 dir_type 分组", async () => {
+    const lib = useLibrary();
+    lib.models.value = [
+      { id: 1, dir_type: "checkpoints", filename: "a.safetensors", display_name: "A" },
+      { id: 2, dir_type: "checkpoints", filename: "b.safetensors", display_name: "B" },
+      { id: 3, dir_type: "loras", filename: "c.safetensors", display_name: "C" },
+    ];
+    expect(lib.treeNodes.value.length).toBe(2);
+    const checkpoints = lib.treeNodes.value.find((n: any) => n.key === "checkpoints");
+    const loras = lib.treeNodes.value.find((n: any) => n.key === "loras");
+    expect(checkpoints.children.length).toBe(2);
+    expect(loras.children.length).toBe(1);
+  });
 });
