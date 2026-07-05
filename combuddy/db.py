@@ -1,6 +1,6 @@
 import sqlite3
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 def connect(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -81,6 +81,21 @@ def init_schema(conn: sqlite3.Connection) -> None:
             size INTEGER,
             trashed_at REAL NOT NULL,
             trash_path TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS civitai (
+            model_id     INTEGER PRIMARY KEY REFERENCES models(id) ON DELETE CASCADE,
+            sha256       TEXT NOT NULL,
+            found        INTEGER NOT NULL,
+            name         TEXT,
+            version_name TEXT,
+            base_model   TEXT,
+            model_type   TEXT,
+            trigger_words TEXT,
+            nsfw_level   INTEGER,
+            civitai_url  TEXT,
+            image_path   TEXT,
+            checked_at   REAL NOT NULL
         );
         """
     )
