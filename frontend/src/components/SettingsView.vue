@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { onMounted, ref } from "vue";
 import { useSettings } from "../useSettings";
 import ThemePicker from "./ThemePicker.vue";
 const { settings, roots, error, load, save, addRoot } = useSettings();
+const newKind = ref("model");
+const newPath = ref("");
 onMounted(load);
 </script>
 <template>
@@ -28,6 +30,14 @@ onMounted(load);
       <div><div class="flex justify-between text-sm mb-1"><span>NSFW 模糊阈值(越高越少模糊)</span><span class="text-color-secondary">{{ settings.nsfw_blur_threshold }}</span></div>
         <Slider :modelValue="settings.nsfw_blur_threshold" :min="0" :max="32" @change="save({ nsfw_blur_threshold: $event.value })" /></div>
     </Panel>
-    <!-- 根目录 分区在 Task 7 加入 -->
+    <Panel header="根目录">
+      <div v-for="r in roots" :key="r.path" class="flex justify-between text-sm py-1 border-b border-surface-border last:border-0">
+        <span class="text-color truncate">{{ r.path }}</span><Tag :value="r.kind" /></div>
+      <div class="flex gap-2 mt-3">
+        <select v-model="newKind" class="bg-surface-hover rounded px-2 text-sm"><option value="model">model</option><option value="workflow">workflow</option></select>
+        <InputText v-model="newPath" placeholder="目录绝对路径" class="flex-1" />
+        <Button label="添加" @click="newPath && addRoot(newKind, newPath).then(() => (newPath = ''))" />
+      </div>
+    </Panel>
   </div>
 </template>
