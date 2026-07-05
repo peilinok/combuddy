@@ -5,6 +5,7 @@ export function useLibrary() {
   const models = ref<any[]>([]);
   const selected = ref<any | null>(null);
   const search = ref(""); const flag = ref("");
+  const layout = ref<"grid" | "list">("grid");
   const nsfwThreshold = ref(1);
   const revealed = ref<Set<number>>(new Set());
   const lightbox = ref<any | null>(null);
@@ -26,6 +27,6 @@ export function useLibrary() {
   const openLightbox = (m: any) => { lightbox.value = m; };
   const closeLightbox = () => { lightbox.value = null; };
 
-  return { models, selected, search, flag, revealed, lightbox, error, load, openDetail,
+  return { models, selected, search, flag, layout, revealed, lightbox, error, load, openDetail,
     shouldBlur, reveal, openLightbox, closeLightbox };
 }

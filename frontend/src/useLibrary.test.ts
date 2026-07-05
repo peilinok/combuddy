@@ -36,4 +36,8 @@ describe("useLibrary", () => {
     lib.closeLightbox();
     expect(lib.lightbox.value).toBe(null);
   });
+  it("layout 默认 grid", () => {
+    const lib = useLibrary();
+    expect(lib.layout.value).toBe("grid");
+  });
 });
