@@ -36,3 +36,24 @@ def get_roots(conn: sqlite3.Connection, kind: str | None = None) -> list[sqlite3
     if kind:
         return conn.execute("SELECT * FROM roots WHERE kind=? AND enabled=1", (kind,)).fetchall()
     return conn.execute("SELECT * FROM roots WHERE enabled=1").fetchall()
+
+def get_settings(conn: sqlite3.Connection) -> dict:
+    have = {r["key"]: r["value"] for r in conn.execute(
+        "SELECT key,value FROM meta WHERE key IN ('auto_hash','hash_workers','hash_max_mbps')")}
+    return {
+        "auto_hash": have.get("auto_hash", "1") == "1",
+        "hash_workers": int(have.get("hash_workers", "1")),
+        "hash_max_mbps": int(have.get("hash_max_mbps", "0")),
+    }
+
+def set_settings(conn: sqlite3.Connection, values: dict) -> None:
+    if "auto_hash" in values:
+        conn.execute("INSERT OR REPLACE INTO meta(key,value) VALUES('auto_hash',?)",
+                     ("1" if values["auto_hash"] else "0",))
+    if "hash_workers" in values:
+        w = max(1, min(int(values["hash_workers"]), 8))
+        conn.execute("INSERT OR REPLACE INTO meta(key,value) VALUES('hash_workers',?)", (str(w),))
+    if "hash_max_mbps" in values:
+        m = max(0, int(values["hash_max_mbps"]))
+        conn.execute("INSERT OR REPLACE INTO meta(key,value) VALUES('hash_max_mbps',?)", (str(m),))
+    conn.commit()
