@@ -1,36 +1,46 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, computed } from "vue";
+import { useI18n } from "vue-i18n";
 import { getRoots } from "./api";
+import { useTheme } from "./useTheme";
 import DashboardView from "./components/DashboardView.vue";
 import LibraryView from "./components/LibraryView.vue";
 import WorkflowView from "./components/WorkflowView.vue";
 import CleanupView from "./components/CleanupView.vue";
+import SettingsView from "./components/SettingsView.vue";
 import RootsSetup from "./components/RootsSetup.vue";
 
+useTheme(); // 接管换肤(首屏脚本已上好初始主题)
+const { t } = useI18n();
 const configured = ref(true);
-const view = ref<"dashboard" | "library" | "workflows" | "cleanup">("dashboard");
-const nav = [
-  { key: "dashboard", label: "Dashboard" }, { key: "library", label: "模型库" },
-  { key: "workflows", label: "Workflow 对应" }, { key: "cleanup", label: "清理中心" },
-] as const;
-const views = { dashboard: DashboardView, library: LibraryView, workflows: WorkflowView, cleanup: CleanupView };
+type View = "dashboard" | "library" | "workflows" | "cleanup" | "settings";
+const view = ref<View>("dashboard");
+const views = { dashboard: DashboardView, library: LibraryView, workflows: WorkflowView,
+  cleanup: CleanupView, settings: SettingsView };
+const items = computed(() => ([
+  { key: "dashboard", label: t("nav.dashboard"), icon: "pi pi-chart-bar" },
+  { key: "library", label: t("nav.library"), icon: "pi pi-images" },
+  { key: "workflows", label: t("nav.workflows"), icon: "pi pi-sitemap" },
+  { key: "cleanup", label: t("nav.cleanup"), icon: "pi pi-trash" },
+  { key: "settings", label: t("nav.settings"), icon: "pi pi-cog" },
+] as const).map((n) => ({ label: n.label, icon: n.icon,
+  class: view.value === n.key ? "cb-nav-active" : "", command: () => (view.value = n.key as View) })));
 onMounted(async () => { const r = await getRoots(); configured.value = (r.roots?.length ?? 0) > 0; });
 </script>
 <template>
-  <div class="min-h-screen flex text-[#e8e8ea]">
-    <aside class="w-44 bg-[#1e1e24] p-4 shrink-0">
-      <div class="font-semibold">combuddy</div>
-      <div class="text-[10px] text-[#7a7a82] mb-6">模型与依赖管家</div>
-      <div v-for="n in nav" :key="n.key" @click="view = n.key"
-        :class="['px-3 py-2 rounded-lg text-sm cursor-pointer mb-1',
-          view === n.key ? 'bg-[#1b3d29] text-[#4ade80] font-semibold' : 'text-[#9a9aa2] hover:text-[#e8e8ea]']">
-        {{ n.label }}
-      </div>
-      <div class="mt-2 text-sm text-[#5c5c64]">下载中心 <span class="text-[10px]">以后</span></div>
+  <div class="min-h-screen flex bg-surface-ground text-color">
+    <aside class="w-52 bg-surface-card border-r border-surface-border p-3 shrink-0">
+      <div class="font-semibold px-2">combuddy</div>
+      <div class="text-[10px] text-color-secondary px-2 mb-4">{{ t("common.subtitle") }}</div>
+      <Menu :model="items" class="w-full border-0 bg-transparent" />
     </aside>
-    <main class="flex-1 p-6">
+    <main class="flex-1 p-6 overflow-auto">
       <RootsSetup v-if="!configured" @done="configured = true" />
       <component v-else :is="views[view]" />
     </main>
   </div>
 </template>
+<style>
+.cb-nav-active .p-menuitem-link { background: var(--surface-hover); }
+.cb-nav-active .p-menuitem-text, .cb-nav-active .p-menuitem-icon { color: var(--primary-color) !important; }
+</style>

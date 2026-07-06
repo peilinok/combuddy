@@ -1,0 +1,46 @@
+export default {
+  nav: { dashboard: "Dashboard", library: "Model Library", workflows: "Workflow", cleanup: "Cleanup", settings: "Settings" },
+  common: { subtitle: "Models & dependency manager" },
+  settings: {
+    title: "Settings", appearance: "Appearance", language: "Language", langZh: "中文", langEn: "English",
+    scanHash: "Scan & Hash", autoHash: "Compute sha256 automatically after scan", hashWorkers: "Hash workers",
+    maxMbps: "Rate limit MB/s (0 = unlimited)",
+    civitaiEnrich: "Civitai Enrichment", onlineEnrich: "Auto-identify online after scan (hash only)",
+    nsfwThreshold: "NSFW blur threshold (higher = less blurring)",
+    roots: "Root Directories", pathPlaceholder: "Absolute directory path", add: "Add",
+  },
+  theme: { palette: "Palette", mode: "Mode", modeAuto: "Follow system", modeLight: "Light", modeDark: "Dark" },
+  roles: {
+    textEncoder: "Text Encoder", vae: "VAE", controlnet: "ControlNet", clipVision: "CLIP Vision",
+    upscale: "Upscaler", embedding: "Embedding", modelPatch: "Model Patch", styleModel: "Style Model",
+    insightface: "InsightFace", sam: "SAM", detection: "Detector", faceRestore: "Face Restore", vaeApprox: "VAE Approx",
+  },
+  label: { unknown: "Unknown" },
+  dashboard: {
+    title: "Dashboard", scan: "Scan / Refresh", scanning: "Scanning…", hashing: "Computing hashes…", enriching: "Identifying online…",
+    cancel: "Cancel",
+    phaseScanning: "Scanning…", phaseWorkflows: "Parsing workflows…", phaseBases: "Reading headers…",
+    phaseHashing: "Computing hashes…", phaseEnriching: "Identifying online…",
+    models: "Models", workflows: "Workflows", totalSize: "Total Size", unreferenced: "Unreferenced", cleanable: "Cleanable",
+    baseCoverage: "Base identified", hashCoverage: "sha256 hashed", civitaiCoverage: "Civitai identified",
+    byType: "Usage by Type",
+  },
+  library: {
+    title: "Model Library", search: "Search name…", unknown: "Unidentified", unreferenced: "Unreferenced",
+    gridView: "Grid view", listView: "List view", type: "Type", all: "All",
+    colName: "Name", colType: "Type", colLabel: "Label", colSize: "Size", colUsage: "Usage",
+    empty: "No matching models", sha256: "sha256", notHashed: "not computed",
+    triggerWords: "Trigger words:", viewOnCivitai: "View on Civitai ↗",
+    refBy: "Referenced by — used in {n} workflow(s)", noRef: "Not referenced by any workflow (cleanable)",
+  },
+  card: { refCount: "Refs {n}" },
+  workflow: { title: "Workflow", hitMiss: "Resolved {hit} · Missing {miss}", summary: "Resolved {hit} · Ambiguous {ambiguous} · Missing {miss}" },
+  cleanup: {
+    title: "Cleanup Center", unreferencedModels: "Unreferenced Models", countUnused: "{n} · not used by any workflow",
+    reclaimable: "Reclaimable", selectedSummary: "{n} selected · {size} · all 0 refs, safe to remove", moveToTrash: "Move to Trash",
+  },
+  setup: {
+    title: "Point to your directories", modelDir: "Model directory (e.g. …/ComfyUI-Shared/models)",
+    workflowDir: "Workflow directory (e.g. …/user/default/workflows)", saveAndScan: "Save & Scan",
+  },
+};

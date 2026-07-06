@@ -36,4 +36,32 @@ describe("useLibrary", () => {
     lib.closeLightbox();
     expect(lib.lightbox.value).toBe(null);
   });
+  it("layout 默认 grid", () => {
+    const lib = useLibrary();
+    expect(lib.layout.value).toBe("grid");
+  });
+  it("typeCounts 按 dir_type 计数", async () => {
+    const lib = useLibrary();
+    lib.models.value = [
+      { id: 1, dir_type: "checkpoints", filename: "a.safetensors", display_name: "A" },
+      { id: 2, dir_type: "checkpoints", filename: "b.safetensors", display_name: "B" },
+      { id: 3, dir_type: "loras", filename: "c.safetensors", display_name: "C" },
+    ];
+    expect(lib.typeCounts.value.length).toBe(2);
+    const checkpoints = lib.typeCounts.value.find((t: any) => t.dir_type === "checkpoints");
+    const loras = lib.typeCounts.value.find((t: any) => t.dir_type === "loras");
+    expect(checkpoints.count).toBe(2);
+    expect(loras.count).toBe(1);
+  });
+  it("typeFilter='loras' 时 visibleModels 只剩该类", async () => {
+    const lib = useLibrary();
+    lib.models.value = [
+      { id: 1, dir_type: "checkpoints", filename: "a.safetensors", display_name: "A" },
+      { id: 2, dir_type: "checkpoints", filename: "b.safetensors", display_name: "B" },
+      { id: 3, dir_type: "loras", filename: "c.safetensors", display_name: "C" },
+    ];
+    lib.typeFilter.value = "loras";
+    expect(lib.visibleModels.value.length).toBe(1);
+    expect(lib.visibleModels.value[0].id).toBe(3);
+  });
 });

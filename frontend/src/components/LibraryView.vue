@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from "vue";
+import { useI18n } from "vue-i18n";
 import { useLibrary } from "../useLibrary";
 import { humanSize } from "../format";
-const { models, selected, search, flag, revealed, lightbox, load, openDetail, error,
-  shouldBlur, reveal, openLightbox, closeLightbox } = useLibrary();
+import { displayLabel, isIdentified } from "../labels";
+import ModelCard from "./ModelCard.vue";
+const { t } = useI18n();
+const { models, selected, search, flag, layout, revealed, lightbox, load, openDetail, error,
+  shouldBlur, reveal, openLightbox, closeLightbox, typeFilter, collapsed, typeCounts, visibleModels } = useLibrary();
 function onKey(e: KeyboardEvent) { if (e.key === "Escape") closeLightbox(); }
 onMounted(() => { load(); window.addEventListener("keydown", onKey); });
 onUnmounted(() => window.removeEventListener("keydown", onKey));
@@ -11,63 +15,98 @@ function setFlag(f: string) { flag.value = flag.value === f ? "" : f; load(); }
 </script>
 <template>
   <div>
-    <h1 class="text-xl font-semibold mb-4">模型库</h1>
-    <div v-if="error" class="text-[#f0883e] text-sm mb-3">{{ error }}</div>
-    <div class="flex gap-2 mb-4">
-      <input v-model="search" @input="load" placeholder="搜索名称…"
-        class="px-3 py-2 rounded bg-[#202027] text-sm w-64" />
-      <button @click="setFlag('unknown')" :class="['px-3 rounded text-xs', flag==='unknown'?'bg-[#1b3d29] text-[#4ade80]':'bg-[#202027] text-[#c8c8ce]']">未识别</button>
-      <button @click="setFlag('unreferenced')" :class="['px-3 rounded text-xs', flag==='unreferenced'?'bg-[#1b3d29] text-[#4ade80]':'bg-[#202027] text-[#c8c8ce]']">未被引用</button>
+    <h1 class="text-xl font-semibold mb-4">{{ t("library.title") }}</h1>
+    <div v-if="error" class="text-orange-400 text-sm mb-3">{{ error }}</div>
+    <div class="flex gap-2 mb-4 items-center">
+      <input v-model="search" @input="load" :placeholder="t('library.search')"
+        class="px-3 py-2 rounded bg-surface-card text-sm w-64" />
+      <button @click="setFlag('unknown')" :class="['px-3 rounded text-xs', flag==='unknown'?'bg-surface-hover text-primary':'bg-surface-card text-color-secondary']">{{ t("library.unknown") }}</button>
+      <button @click="setFlag('unreferenced')" :class="['px-3 rounded text-xs', flag==='unreferenced'?'bg-surface-hover text-primary':'bg-surface-card text-color-secondary']">{{ t("library.unreferenced") }}</button>
+      <div class="ml-auto flex gap-1">
+        <button @click="layout = 'grid'" :title="t('library.gridView')"
+          :class="['w-9 h-9 rounded flex items-center justify-center', layout==='grid'?'bg-surface-hover text-primary':'bg-surface-card text-color-secondary']">
+          <i class="pi pi-th-large"></i>
+        </button>
+        <button @click="layout = 'list'" :title="t('library.listView')"
+          :class="['w-9 h-9 rounded flex items-center justify-center', layout==='list'?'bg-surface-hover text-primary':'bg-surface-card text-color-secondary']">
+          <i class="pi pi-bars"></i>
+        </button>
+      </div>
     </div>
-    <table class="w-full text-sm">
-      <thead class="text-[#8a8a93] text-xs"><tr>
-        <th class="text-left font-normal pb-2">名称</th><th class="text-left font-normal">类型</th>
-        <th class="text-left font-normal">标识</th><th class="text-right font-normal">大小</th><th class="text-right font-normal">用量</th>
-      </tr></thead>
-      <tbody>
-        <template v-for="m in models" :key="m.id">
-          <tr @click="openDetail(m.id)" class="cursor-pointer hover:bg-[#20232a]">
-            <td class="py-1.5 text-[#d8d8de]">
-              <span class="inline-flex items-center gap-2">
-                <img v-if="m.has_preview" :src="'/api/preview/' + m.sha256"
-                  :class="['w-7 h-7 rounded object-cover cursor-zoom-in', shouldBlur(m.nsfw_level) && !revealed.has(m.id) ? 'blur-sm' : '']"
-                  @click.stop="openLightbox(m)" />
-                {{ m.civitai_name || m.display_name || m.filename }}
-              </span>
-            </td>
-            <td class="text-[#c8c8ce]">{{ m.dir_type }}</td>
-            <td :class="m.civitai_found || m.label!=='未识别' ? 'text-[#4ade80]' : 'text-[#6c6c74]'">{{ m.civitai_base || m.label }}</td>
-            <td class="text-right text-[#c8c8ce]">{{ humanSize(m.size) }}</td>
-            <td :class="['text-right', m.ref_count ? 'text-[#8a8a93]' : 'text-[#f0883e] font-semibold']">{{ m.ref_count }}</td>
-          </tr>
-          <tr v-if="selected && selected.id === m.id">
-            <td colspan="5" class="bg-[#202027] rounded p-3 text-xs">
-              <div class="text-[#8a8a93] mb-1">{{ m.dir_type }} · {{ m.label }} · {{ m.precision || '—' }} · {{ humanSize(m.size) }}</div>
-              <div class="text-[#6c6c74] font-mono text-[11px] break-all">
-                sha256 {{ selected.sha256 || '未计算' }}
+    <div class="flex gap-4">
+      <aside :class="['shrink-0 transition-all', collapsed ? 'w-8' : 'w-48']">
+        <button @click="collapsed = !collapsed" class="text-color-secondary text-xs mb-2 flex items-center gap-1">
+          <i :class="collapsed ? 'pi pi-angle-right' : 'pi pi-angle-left'"></i><span v-if="!collapsed">{{ t("library.type") }}</span>
+        </button>
+        <div v-if="!collapsed">
+          <button @click="typeFilter = ''" :class="['w-full text-left px-2 py-1 rounded text-sm', typeFilter==='' ? 'bg-surface-hover text-primary' : 'text-color-secondary hover:bg-surface-hover']">{{ t("library.all") }} ({{ models.length }})</button>
+          <button v-for="tc in typeCounts" :key="tc.dir_type" @click="typeFilter = tc.dir_type"
+            :class="['w-full text-left px-2 py-1 rounded text-sm truncate', typeFilter===tc.dir_type ? 'bg-surface-hover text-primary' : 'text-color-secondary hover:bg-surface-hover']">
+            {{ tc.dir_type }} ({{ tc.count }})</button>
+        </div>
+      </aside>
+      <div class="flex-1 min-w-0">
+        <DataView :value="visibleModels" :layout="layout">
+          <template #grid="{ items }">
+            <div class="grid grid-cols-4 gap-3">
+              <ModelCard v-for="m in items" :key="m.id" :m="m"
+                :blur="shouldBlur(m.nsfw_level) && !revealed.has(m.id)"
+                @zoom="openLightbox(m)" @open="openDetail(m.id)" />
+            </div>
+          </template>
+          <template #list="{ items }">
+            <table class="w-full text-sm">
+              <thead class="text-color-secondary text-xs"><tr>
+                <th class="text-left font-normal pb-2">{{ t("library.colName") }}</th><th class="text-left font-normal">{{ t("library.colType") }}</th>
+                <th class="text-left font-normal">{{ t("library.colLabel") }}</th><th class="text-right font-normal">{{ t("library.colSize") }}</th><th class="text-right font-normal">{{ t("library.colUsage") }}</th>
+              </tr></thead>
+              <tbody>
+                <tr v-for="m in items" :key="m.id" @click="openDetail(m.id)" class="cursor-pointer hover:bg-surface-hover">
+                  <td class="py-1.5 text-color">
+                    <span class="inline-flex items-center gap-2">
+                      <img v-if="m.has_preview" :src="'/api/preview/' + m.sha256"
+                        :class="['w-7 h-7 rounded object-cover cursor-zoom-in', shouldBlur(m.nsfw_level) && !revealed.has(m.id) ? 'blur-sm' : '']"
+                        @click.stop="openLightbox(m)" />
+                      {{ m.civitai_name || m.display_name || m.filename }}
+                    </span>
+                  </td>
+                  <td class="text-color-secondary">{{ m.dir_type }}</td>
+                  <td :class="isIdentified(m) ? 'text-primary' : 'text-color-secondary'">{{ displayLabel(m, t) }}</td>
+                  <td class="text-right text-color-secondary">{{ humanSize(m.size) }}</td>
+                  <td :class="['text-right', m.ref_count ? 'text-color-secondary' : 'text-orange-400 font-semibold']">{{ m.ref_count }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
+          <template #empty>
+            <div class="text-color-secondary text-sm py-6 text-center">{{ t("library.empty") }}</div>
+          </template>
+        </DataView>
+        <div v-if="selected" class="bg-surface-card rounded p-3 text-xs mt-4">
+          <div class="text-color-secondary mb-1">{{ selected.dir_type }} · {{ displayLabel(selected, t) }} · {{ selected.precision || '—' }} · {{ humanSize(selected.size) }}</div>
+          <div class="text-color-secondary font-mono text-[11px] break-all">
+            {{ t("library.sha256") }} {{ selected.sha256 || t("library.notHashed") }}
+          </div>
+          <div v-if="selected.civitai_found" class="mt-2 border-t border-surface-border pt-2">
+            <div class="flex gap-3">
+              <img v-if="selected.has_preview" :src="'/api/preview/' + selected.sha256"
+                :class="['w-24 h-24 rounded object-cover shrink-0 cursor-zoom-in', shouldBlur(selected.nsfw_level) && !revealed.has(selected.id) ? 'blur-md' : '']"
+                @click="openLightbox(selected)" />
+              <div>
+                <div class="text-color font-semibold">{{ selected.civitai_name }}
+                  <span class="text-color-secondary font-normal">· {{ selected.civitai_base }} · {{ selected.civitai_type }}</span></div>
+                <div v-if="JSON.parse(selected.trigger_words || '[]').length" class="text-color-secondary mt-1">
+                  {{ t("library.triggerWords") }}<code v-for="tw in JSON.parse(selected.trigger_words)" :key="tw" class="mr-1 px-1 bg-surface-hover rounded">{{ tw }}</code></div>
+                <a :href="selected.civitai_url" target="_blank" class="text-primary text-[11px]">{{ t("library.viewOnCivitai") }}</a>
               </div>
-              <div v-if="selected.civitai_found" class="mt-2 border-t border-[#2a2a30] pt-2">
-                <div class="flex gap-3">
-                  <img v-if="selected.has_preview" :src="'/api/preview/' + selected.sha256"
-                    :class="['w-24 h-24 rounded object-cover shrink-0 cursor-zoom-in', shouldBlur(selected.nsfw_level) && !revealed.has(selected.id) ? 'blur-md' : '']"
-                    @click="openLightbox(selected)" />
-                  <div>
-                    <div class="text-[#d8d8de] font-semibold">{{ selected.civitai_name }}
-                      <span class="text-[#8a8a93] font-normal">· {{ selected.civitai_base }} · {{ selected.civitai_type }}</span></div>
-                    <div v-if="JSON.parse(selected.trigger_words || '[]').length" class="text-[#c8c8ce] mt-1">
-                      触发词:<code v-for="t in JSON.parse(selected.trigger_words)" :key="t" class="mr-1 px-1 bg-[#17171c] rounded">{{ t }}</code></div>
-                    <a :href="selected.civitai_url" target="_blank" class="text-[#4ade80] text-[11px]">在 Civitai 查看 ↗</a>
-                  </div>
-                </div>
-              </div>
-              <div class="text-[#c8c8ce] font-semibold mt-2">反向依赖 — 被 {{ selected.workflows.length }} 个 workflow 引用</div>
-              <div v-for="w in selected.workflows" :key="w.id" class="text-[#c8c8ce]">· {{ w.filename }}</div>
-              <div v-if="!selected.workflows.length" class="text-[#f0883e]">没有 workflow 引用它(可清理)</div>
-            </td>
-          </tr>
-        </template>
-      </tbody>
-    </table>
+            </div>
+          </div>
+          <div class="text-color-secondary font-semibold mt-2">{{ t("library.refBy", { n: selected.workflows.length }) }}</div>
+          <div v-for="w in selected.workflows" :key="w.id" class="text-color-secondary">· {{ w.filename }}</div>
+          <div v-if="!selected.workflows.length" class="text-orange-400">{{ t("library.noRef") }}</div>
+        </div>
+      </div>
+    </div>
     <div v-if="lightbox" class="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-6 cursor-zoom-out"
       @click="closeLightbox">
       <img :src="'/api/preview/' + lightbox.sha256 + '?hd=1'"

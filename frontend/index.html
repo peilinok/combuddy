@@ -1,3 +1,17 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>combuddy</title></head>
-<body class="bg-[#16161a]"><div id="app"></div><script type="module" src="/src/main.ts"></script></body></html>
+<html><head><meta charset="utf-8"><title>combuddy</title>
+<script>
+(function () {
+  var PAL = ["green","blue","cyan","purple","amber"], MOD = ["auto","light","dark"];
+  var s = {}; try { s = JSON.parse(localStorage.getItem("combuddy-theme") || "{}"); } catch (e) {}
+  var palette = PAL.indexOf(s.palette) >= 0 ? s.palette : "green";
+  var mode = MOD.indexOf(s.mode) >= 0 ? s.mode : "auto";
+  var resolved = mode === "auto" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : mode;
+  document.documentElement.style.background = resolved === "dark" ? "#0a0a0a" : "#ffffff";
+  var l = document.createElement("link");
+  l.id = "theme-link"; l.rel = "stylesheet"; l.href = "/themes/aura-" + resolved + "-" + palette + ".css";
+  document.head.appendChild(l);
+})();
+</script>
+</head>
+<body><div id="app"></div><script type="module" src="/src/main.ts"></script></body></html>

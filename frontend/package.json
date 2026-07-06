@@ -3,13 +3,24 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "node scripts/copy-themes.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/copy-themes.mjs",
     "build": "vite build --outDir ../combuddy/web --emptyOutDir",
     "test": "vitest run"
   },
-  "dependencies": { "vue": "^3.4", "primevue": "^3.50" },
+  "dependencies": {
+    "primeicons": "^7.0.0",
+    "primevue": "^3.50",
+    "vue": "^3.4",
+    "vue-i18n": "^11.4.6"
+  },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^5", "vite": "^5", "vitest": "^1",
-    "tailwindcss": "^3.4", "postcss": "^8", "autoprefixer": "^10"
+    "@vitejs/plugin-vue": "^5",
+    "autoprefixer": "^10",
+    "postcss": "^8",
+    "tailwindcss": "^3.4",
+    "vite": "^5",
+    "vitest": "^1"
   }
 }

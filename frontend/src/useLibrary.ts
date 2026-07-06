@@ -1,10 +1,13 @@
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { fetchModels, fetchModel, getSettings } from "./api";
 
 export function useLibrary() {
   const models = ref<any[]>([]);
   const selected = ref<any | null>(null);
   const search = ref(""); const flag = ref("");
+  const layout = ref<"grid" | "list">("grid");
+  const typeFilter = ref("");
+  const collapsed = ref(false);
   const nsfwThreshold = ref(1);
   const revealed = ref<Set<number>>(new Set());
   const lightbox = ref<any | null>(null);
@@ -25,7 +28,13 @@ export function useLibrary() {
   const reveal = (id: number) => { revealed.value = new Set(revealed.value).add(id); };
   const openLightbox = (m: any) => { lightbox.value = m; };
   const closeLightbox = () => { lightbox.value = null; };
+  const typeCounts = computed(() => {
+    const c: Record<string, number> = {};
+    for (const m of models.value) c[m.dir_type] = (c[m.dir_type] ?? 0) + 1;
+    return Object.entries(c).sort((a, b) => b[1] - a[1]).map(([dir_type, count]) => ({ dir_type, count }));
+  });
+  const visibleModels = computed(() => typeFilter.value ? models.value.filter((m) => m.dir_type === typeFilter.value) : models.value);
 
-  return { models, selected, search, flag, revealed, lightbox, error, load, openDetail,
-    shouldBlur, reveal, openLightbox, closeLightbox };
+  return { models, selected, search, flag, layout, revealed, lightbox, error, load, openDetail,
+    shouldBlur, reveal, openLightbox, closeLightbox, typeFilter, collapsed, typeCounts, visibleModels };
 }
