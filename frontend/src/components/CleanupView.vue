@@ -11,9 +11,7 @@ const d = useDuplicates();
 onMounted(() => { u.load(); d.load(); });
 const total = computed(() => u.items.value.reduce((s: number, m: any) => s + m.size, 0));
 function reason(g: any, m: any) {
-  if (m.ref_count > 0) return t("duplicates.reasonRef");
-  if (m.rel_path === g.members.find((x: any) => x.id === d.keepId(g))?.rel_path) return t("duplicates.reasonPath");
-  return t("duplicates.reasonSeen");
+  return m.ref_count > 0 ? t("duplicates.reasonRef") : t("duplicates.reasonPath");
 }
 function headName(g: any) { return g.members.find((m: any) => m.id === d.keepId(g))?.filename; }
 function keepInode(g: any) { return g.members.find((m: any) => m.id === d.keepId(g))?.inode; }

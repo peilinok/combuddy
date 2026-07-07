@@ -46,7 +46,7 @@ export default {
     emptyClean: "No duplicates found", hashing: "Hashing in progress — results fill in as it runs",
     unhashed: "{n} models not yet hashed — excluded",
     perCopy: "{count} copies · {size} each · {reclaimable} reclaimable",
-    keep: "Keep", reasonRef: "in use", reasonPath: "standard location", reasonSeen: "earliest",
+    keep: "Keep", reasonRef: "in use", reasonPath: "standard location",
     inUse: "In use · won't be cleaned", pendingDelete: "To delete",
     hardlink: "Two entries pointing at the same data on disk — deleting it frees nothing, so it's left alone",
     allInUse: "All in use — nothing to reclaim",

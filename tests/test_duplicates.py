@@ -83,6 +83,16 @@ def test_duplicate_waste_equals_sum_reclaimable(tmp_path):
     assert stats._duplicate_waste(c) == sum(g["reclaimable"] for g in groups)
     assert stats.get_stats(c)["duplicate_waste"] == stats._duplicate_waste(c)
 
+def test_two_referenced_keeps_earliest(tmp_path):
+    c = _conn(tmp_path)
+    a = _file(tmp_path, "a.safetensors"); b = _file(tmp_path, "b.safetensors"); e = _file(tmp_path, "e.safetensors")
+    _add(c, 1, a, "S", "a.safetensors", first_seen=3.0)   # 被引用但较晚
+    _add(c, 2, b, "S", "b.safetensors", first_seen=1.0)   # 被引用且最早 → 应为 keep
+    _add(c, 3, e, "S", "e.safetensors", first_seen=2.0)   # 未引用
+    _ref(c, 1, wf_id=1); _ref(c, 2, wf_id=2)              # 1、2 各被一个 workflow 引用
+    g = queries.list_duplicate_groups(c)[0]
+    assert g["suggested_keep_id"] == 2                     # 最早被引用者
+
 def test_duplicates_endpoint(tmp_path):
     from fastapi.testclient import TestClient
     from combuddy import api

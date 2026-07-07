@@ -46,7 +46,7 @@ export default {
     emptyClean: "未发现重复", hashing: "指纹计算中,结果会随进度逐步显示",
     unhashed: "{n} 个模型尚未计算指纹、未纳入比对",
     perCopy: "{count} 份 · 每份 {size} · 可回收 {reclaimable}",
-    keep: "保留", reasonRef: "使用中", reasonPath: "标准位置", reasonSeen: "最早收录",
+    keep: "保留", reasonRef: "使用中", reasonPath: "标准位置",
     inUse: "使用中 · 不会被清理", pendingDelete: "待删",
     hardlink: "与保留项在磁盘上是同一份数据的两个入口,删它不会释放空间,故不处理",
     allInUse: "都在使用中,暂无法清理",
