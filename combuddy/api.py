@@ -109,6 +109,15 @@ def create_app(db_path: str, static_dir: str | None = None) -> FastAPI:
         c = conn(); rows = trash.list_trash(c); c.close()
         return {"trash": rows}
 
+    @app.get("/api/cleanup/duplicates")
+    def api_duplicates():
+        c = conn()
+        groups = queries.list_duplicate_groups(c)
+        total = sum(g["reclaimable"] for g in groups)
+        unhashed = c.execute("SELECT COUNT(*) n FROM models WHERE sha256 IS NULL").fetchone()["n"]
+        c.close()
+        return {"groups": groups, "total_reclaimable": total, "unhashed_count": unhashed}
+
     @app.post("/api/cleanup/restore")
     def api_restore(body: dict):
         c = conn(); res = trash.restore(c, body.get("trash_ids", [])); c.close()

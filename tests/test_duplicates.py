@@ -82,3 +82,23 @@ def test_duplicate_waste_equals_sum_reclaimable(tmp_path):
     groups = queries.list_duplicate_groups(c)
     assert stats._duplicate_waste(c) == sum(g["reclaimable"] for g in groups)
     assert stats.get_stats(c)["duplicate_waste"] == stats._duplicate_waste(c)
+
+def test_duplicates_endpoint(tmp_path):
+    from fastapi.testclient import TestClient
+    from combuddy import api
+    db_path = str(tmp_path / "t.db")
+    c = dbm.connect(db_path); dbm.init_schema(c)
+    c.execute("INSERT INTO roots(id,kind,path,label) VALUES(1,'model',?,?)", (str(tmp_path), "s"))
+    a = _file(tmp_path, "a.safetensors"); b = _file(tmp_path, "sub_b.safetensors")
+    _add(c, 1, a, "S", "a.safetensors", first_seen=1.0)
+    _add(c, 2, b, "S", "sub/b.safetensors", first_seen=2.0)
+    c.execute("INSERT INTO models(id,root_id,path,rel_path,dir_type,rel_in_type,filename,ext,"
+              "size,mtime,match_key,name_key,first_seen,last_scanned) "
+              "VALUES(3,1,?, 'c.safetensors','checkpoints','c.safetensors','c.safetensors',"
+              "'safetensors',1,0,'c','c',0,0)", (str(tmp_path / "c.safetensors"),))  # sha256 NULL
+    c.commit(); c.close()
+    client = TestClient(api.create_app(db_path))
+    r = client.get("/api/cleanup/duplicates").json()
+    assert len(r["groups"]) == 1
+    assert r["total_reclaimable"] == os.path.getsize(b)
+    assert r["unhashed_count"] == 1
