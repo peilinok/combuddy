@@ -1,5 +1,5 @@
 import os, time, pytest
-from combuddy import db as dbm, queries
+from combuddy import db as dbm, queries, stats
 
 def _conn(tmp_path):
     c = dbm.connect(str(tmp_path / "t.db")); dbm.init_schema(c)
@@ -73,3 +73,12 @@ def test_stat_fail_on_keep_skips_whole_group(tmp_path):
     _add(c, 2, b, "S", "sub/b.safetensors", first_seen=2.0)
     os.remove(a)                                             # keep 候选 stat 失败
     assert queries.list_duplicate_groups(c) == []
+
+def test_duplicate_waste_equals_sum_reclaimable(tmp_path):
+    c = _conn(tmp_path)
+    a = _file(tmp_path, "a.safetensors"); b = _file(tmp_path, "sub_b.safetensors")
+    _add(c, 1, a, "S", "a.safetensors", first_seen=1.0)
+    _add(c, 2, b, "S", "sub/b.safetensors", first_seen=2.0)
+    groups = queries.list_duplicate_groups(c)
+    assert stats._duplicate_waste(c) == sum(g["reclaimable"] for g in groups)
+    assert stats.get_stats(c)["duplicate_waste"] == stats._duplicate_waste(c)
