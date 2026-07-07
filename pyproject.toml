@@ -41,4 +41,4 @@ build-backend = "setuptools.build_meta"
 packages = ["combuddy", "combuddy.demo"]
 
 [tool.setuptools.package-data]
-combuddy = ["web/**/*", "demo/**/*"]
+combuddy = ["web/**/*", "demo/previews/*.jpg"]
