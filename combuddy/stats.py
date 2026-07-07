@@ -1,4 +1,8 @@
 import sqlite3
+from . import queries
+
+def _duplicate_waste(conn: sqlite3.Connection) -> int:
+    return sum(g["reclaimable"] for g in queries.list_duplicate_groups(conn))
 
 def get_stats(conn: sqlite3.Connection) -> dict:
     model_count = conn.execute("SELECT COUNT(*) c FROM models").fetchone()["c"]
@@ -19,7 +23,9 @@ def get_stats(conn: sqlite3.Connection) -> dict:
         "base_coverage": {"done": done, "total": model_count},
         "hash_coverage": {"hashed": hashed, "total": model_count},
         "civitai_coverage": {"identified": identified, "total": model_count},
-        "unreferenced_count": unref, "by_type": by_type,
+        "unreferenced_count": unref,
+        "duplicate_waste": _duplicate_waste(conn),
+        "by_type": by_type,
     }
 
 def get_unreferenced(conn: sqlite3.Connection) -> list[dict]:

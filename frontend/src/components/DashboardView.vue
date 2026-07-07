@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useDashboard } from "../useDashboard";
 import { humanSize } from "../format";
+import { view, cleanupTab } from "../useNav";
 const { t } = useI18n();
 const { stats, scanning, error, startScan, cancelHash,
   refresh, startPolling, stopPolling } = useDashboard();
@@ -36,6 +37,11 @@ const tiles = computed(() => [
   { label: t("dashboard.workflows"), icon: "pi pi-sitemap", value: stats.value.workflow_count },
   { label: t("dashboard.totalSize"), icon: "pi pi-database", value: humanSize(stats.value.total_size) },
   { label: t("dashboard.unreferenced"), icon: "pi pi-exclamation-triangle", value: stats.value.unreferenced_count, sub: t("dashboard.cleanable"), warn: true },
+  { label: t("dashboard.dupWaste"),
+    icon: "pi pi-copy",
+    value: stats.value.scanning ? t("dashboard.dupCalc")
+      : (stats.value.duplicate_waste ? humanSize(stats.value.duplicate_waste) : t("dashboard.dupNone")),
+    click: () => { cleanupTab.value = "duplicates"; view.value = "cleanup"; } },
 ]);
 
 function cov(c: any, key: string) { const done = c?.[key] ?? 0, total = c?.total ?? 0;
@@ -63,7 +69,9 @@ const knobs = computed(() => [
       <Button :label="t('dashboard.cancel')" text @click="cancelHash" class="mt-2" v-if="stats.scan?.phase==='hashing' || stats.scan?.phase==='enriching'" />
     </div>
     <div class="grid grid-cols-4 gap-3 mb-4">
-      <Card v-for="s in tiles" :key="s.label"><template #content>
+      <Card v-for="s in tiles" :key="s.label"
+        :class="s.click ? 'cursor-pointer hover:bg-surface-hover transition-colors' : ''"
+        @click="s.click && s.click()"><template #content>
         <div class="flex items-center gap-3">
           <i :class="s.icon" class="text-2xl text-primary"></i>
           <div><div class="text-2xl font-bold" :class="s.warn ? 'text-orange-400' : 'text-color'">{{ s.value }}</div>

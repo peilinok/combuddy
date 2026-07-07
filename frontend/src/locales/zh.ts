@@ -24,6 +24,7 @@ export default {
     models: "模型", workflows: "工作流", totalSize: "总大小", unreferenced: "未被引用", cleanable: "可清理",
     baseCoverage: "base 识别", hashCoverage: "sha256 指纹", civitaiCoverage: "Civitai 识别",
     byType: "按类型占用",
+    dupWaste: "可回收重复", dupNone: "无重复", dupCalc: "计算中",
   },
   library: {
     title: "模型库", search: "搜索名称…", unknown: "未识别", unreferenced: "未被引用",
@@ -38,6 +39,20 @@ export default {
   cleanup: {
     title: "清理中心", unreferencedModels: "未被引用的模型", countUnused: "{n} 个 · 没有任何 workflow 使用它们",
     reclaimable: "可回收", selectedSummary: "已选 {n} 项 · {size} · 均 0 引用,可安全移除", moveToTrash: "移至回收站",
+  },
+  duplicates: {
+    tabUnref: "未引用", tabDup: "重复",
+    summary: "{groups} 组重复 · 可回收 {size}",
+    emptyClean: "未发现重复", hashing: "指纹计算中,结果会随进度逐步显示",
+    unhashed: "{n} 个模型尚未计算指纹、未纳入比对",
+    perCopy: "{count} 份 · 每份 {size} · 可回收 {reclaimable}",
+    keep: "保留", reasonRef: "使用中", reasonPath: "标准位置",
+    inUse: "使用中 · 不会被清理", pendingDelete: "待删",
+    hardlink: "与保留项在磁盘上是同一份数据的两个入口,删它不会释放空间,故不处理",
+    allInUse: "都在使用中,暂无法清理",
+    selectedSummary: "已为你选好 {n} 项 · 可回收 {size}(默认每组留一份)",
+    confirm: "将移动 {n} 个文件到可恢复回收站,可随时手动移出恢复。继续?",
+    moveToTrash: "移至回收站",
   },
   setup: {
     title: "指认你的目录", modelDir: "模型目录(如 …/ComfyUI-Shared/models)",

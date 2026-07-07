@@ -3,6 +3,7 @@ import { onMounted, ref, computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { getRoots } from "./api";
 import { useTheme } from "./useTheme";
+import { view, type View } from "./useNav";
 import DashboardView from "./components/DashboardView.vue";
 import LibraryView from "./components/LibraryView.vue";
 import WorkflowView from "./components/WorkflowView.vue";
@@ -13,8 +14,6 @@ import RootsSetup from "./components/RootsSetup.vue";
 useTheme(); // 接管换肤(首屏脚本已上好初始主题)
 const { t } = useI18n();
 const configured = ref(true);
-type View = "dashboard" | "library" | "workflows" | "cleanup" | "settings";
-const view = ref<View>("dashboard");
 const views = { dashboard: DashboardView, library: LibraryView, workflows: WorkflowView,
   cleanup: CleanupView, settings: SettingsView };
 const items = computed(() => ([
