@@ -1,7 +1,14 @@
 # combuddy
 
+A local-first dependency manager for your ComfyUI models and workflows — see what's used, what's missing, and what's safe to delete.
+
 [![CI](https://github.com/peilinok/combuddy/actions/workflows/ci.yml/badge.svg)](https://github.com/peilinok/combuddy/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/combuddy)](https://pypi.org/project/combuddy/)
+[![Python](https://img.shields.io/pypi/pyversions/combuddy)](https://pypi.org/project/combuddy/)
+
+<!-- TODO: replace hero with an animated demo.gif once recorded -->
+![combuddy dashboard](https://raw.githubusercontent.com/peilinok/combuddy/main/.github/images/hero-dashboard.png)
 
 A model & workflow dependency manager for [ComfyUI](https://github.com/comfyanonymous/ComfyUI). Point it at your local model library and workflow files, and it shows you how they depend on each other — which workflows use which models, which models nothing uses, and which models a workflow is missing. **Local-first**: model identity (base architecture, precision, parameters) is computed from file headers; optional Civitai enrichment by content hash is on by default and toggleable in settings.
 
@@ -16,16 +23,32 @@ Community workflows reference models by bare filename — no download link, no h
 - **Offline identity** — base architecture (SD1.5/SDXL/Flux/…, incl. GGUF), role labels (text encoder, VAE, ControlNet, …), and precision, all read straight from file headers.
 - **Civitai identity** — for models found on Civitai by content hash: real name, base model, trigger words, and a cached preview thumbnail with **HD zoom**. Enrichment sends **only the hash**, is on by default, and is toggleable in settings.
 
+## Features
+
+- **Model library + Civitai enrichment** — every model in one searchable, filterable grid, with real names, preview thumbnails, and trigger words looked up from Civitai by content hash (only the hash ever leaves your machine). Offline identity — base architecture, precision, parameter count — comes straight from local file headers, Civitai match or not.
+
+  ![library](https://raw.githubusercontent.com/peilinok/combuddy/main/.github/images/library.png)
+
+- **Reclaimable duplicate detection** — models are grouped by exact (byte-for-byte, sha256) content match, so you see at a glance how much disk space duplicates are wasting, then clear the unreferenced copies in one click to a recoverable trash.
+
+  ![duplicates](https://raw.githubusercontent.com/peilinok/combuddy/main/.github/images/duplicates.png)
+
+- **Workflow dependency resolution** — pick a workflow and see every model it references marked hit, ambiguous, or missing, so you know what a shared workflow actually needs before you run it.
+
 ## Install & run
 
 Requires Python 3.11+.
 
 ```bash
-pip install -e .
-combuddy
+pipx install combuddy   # recommended — isolated env, `combuddy` always on PATH
+pip install combuddy    # alternative, into your current environment
+uvx combuddy            # or run without installing (needs uv)
+
+combuddy         # scan your own model library and workflows
+combuddy demo    # zero-config tour: bundled sample data, no local library needed
 ```
 
-This starts a local server on `http://127.0.0.1:8511` and opens your browser. On first run, point it at your ComfyUI **models** directory and **workflows** directory (e.g. `.../user/default/workflows`); it scans and populates the Dashboard in seconds.
+`combuddy` starts a local server on `http://127.0.0.1:8511` and opens your browser. On first run, point it at your ComfyUI **models** directory and **workflows** directory (e.g. `.../user/default/workflows`); it scans and populates the Dashboard in seconds. No library handy? `combuddy demo` seeds a temporary database with bundled sample models and workflows and opens the same UI — a full tour, no setup required.
 
 ## How it works
 

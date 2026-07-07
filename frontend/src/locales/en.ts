@@ -58,4 +58,7 @@ export default {
     title: "Point to your directories", modelDir: "Model directory (e.g. …/ComfyUI-Shared/models)",
     workflowDir: "Workflow directory (e.g. …/user/default/workflows)", saveAndScan: "Save & Scan",
   },
+  demo: {
+    banner: "Demo data · install combuddy to manage your own library",
+  },
 };

@@ -4,6 +4,8 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from . import db as dbm, config, stats, scan_service, queries, trash
 
+_DEMO_PREVIEWS_DIR = os.path.join(os.path.dirname(__file__), "demo", "previews")
+
 def _sniff_image(path: str) -> str:
     with open(path, "rb") as f:
         head = f.read(12)
@@ -15,7 +17,7 @@ def _sniff_image(path: str) -> str:
         return "image/webp"
     return "application/octet-stream"
 
-def create_app(db_path: str, static_dir: str | None = None) -> FastAPI:
+def create_app(db_path: str, static_dir: str | None = None, demo: bool = False) -> FastAPI:
     app = FastAPI(title="combuddy")
 
     def conn():
@@ -27,6 +29,7 @@ def create_app(db_path: str, static_dir: str | None = None) -> FastAPI:
         s = stats.get_stats(c)
         s["scanning"] = scan_service.STATUS["running"]
         s["scan"] = dict(scan_service.STATUS)
+        s["demo"] = demo
         c.close()
         return s
 
@@ -49,6 +52,8 @@ def create_app(db_path: str, static_dir: str | None = None) -> FastAPI:
 
     @app.post("/api/scan")
     def post_scan():
+        if demo:
+            return {"started": False, "demo": True}
         if scan_service.STATUS["running"]:
             return JSONResponse({"started": False, "reason": "already running"}, status_code=409)
         def _bg():
@@ -127,6 +132,10 @@ def create_app(db_path: str, static_dir: str | None = None) -> FastAPI:
     def api_preview(sha256: str, hd: int = 0):
         if not re.fullmatch(r"[0-9a-fA-F]{64}", sha256):
             return JSONResponse({"error": "bad hash"}, status_code=404)
+        if demo:
+            idx = int(sha256[:8], 16) % 8
+            path = os.path.join(_DEMO_PREVIEWS_DIR, f"demo_{idx:02d}.jpg")
+            return FileResponse(path, media_type=_sniff_image(path))
         name = sha256 + ("_hd.jpg" if hd else ".jpg")
         path = os.path.join(os.path.dirname(db_path), "previews", name)
         if not os.path.isfile(path):
