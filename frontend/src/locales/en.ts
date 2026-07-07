@@ -24,6 +24,7 @@ export default {
     models: "Models", workflows: "Workflows", totalSize: "Total Size", unreferenced: "Unreferenced", cleanable: "Cleanable",
     baseCoverage: "Base identified", hashCoverage: "sha256 hashed", civitaiCoverage: "Civitai identified",
     byType: "Usage by Type",
+    dupWaste: "Reclaimable dupes", dupNone: "No duplicates", dupCalc: "Calculating",
   },
   library: {
     title: "Model Library", search: "Search name…", unknown: "Unidentified", unreferenced: "Unreferenced",
