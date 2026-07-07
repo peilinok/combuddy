@@ -18,10 +18,11 @@ distinct inode.
 
 No network access, no Civitai calls: `civitai` rows are inserted directly
 with made-up-but-schema-accurate identity fields. `civitai.image_path` is
-intentionally left NULL -- the demo preview endpoint (wired in a later
-task) maps sha256 -> bundled cover deterministically on its own, so this
-module's only responsibility for covers is that the 8 bundled jpgs exist
-under combuddy/demo/previews/.
+set to the bundled cover that sha256 maps to, because the library gates a
+model's thumbnail on `has_preview` (= image_path IS NOT NULL); the demo
+preview endpoint independently maps sha256 -> the same bundled cover, so
+the stored path and the served image agree. The 8 bundled jpgs live under
+combuddy/demo/previews/.
 """
 import hashlib
 import json
@@ -205,13 +206,19 @@ def _insert_civitai(conn: sqlite3.Connection, model_ids: dict) -> None:
     for i, (key, (name, version_name, base_model, model_type, trigger_words)) in enumerate(_CIVITAI.items()):
         model_id = model_ids[key]
         sha = conn.execute("SELECT sha256 FROM models WHERE id=?", (model_id,)).fetchone()["sha256"]
+        # image_path -> the bundled cover this sha maps to (same rule as the demo
+        # preview endpoint): non-NULL so the library's has_preview gate renders a
+        # thumbnail, and truthful so the stored path matches the served image.
+        cover = os.path.join(
+            os.path.dirname(__file__), "previews", f"demo_{int(sha[:8], 16) % 8:02d}.jpg"
+        )
         conn.execute(
             """INSERT INTO civitai(model_id,sha256,found,name,version_name,base_model,
-               model_type,trigger_words,nsfw_level,civitai_url,checked_at)
-               VALUES(?,?,1,?,?,?,?,?,?,?,?)""",
+               model_type,trigger_words,nsfw_level,civitai_url,image_path,checked_at)
+               VALUES(?,?,1,?,?,?,?,?,?,?,?,?)""",
             (model_id, sha, name, version_name, base_model, model_type,
              json.dumps(trigger_words), 1,
-             f"https://civitai.com/models/{100000 + i}?modelVersionId={200000 + i}", now),
+             f"https://civitai.com/models/{100000 + i}?modelVersionId={200000 + i}", cover, now),
         )
 
 

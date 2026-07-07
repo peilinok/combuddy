@@ -55,15 +55,16 @@ def test_duplicate_groups_resolve_via_real_query_and_referenced_wins_keep(tmp_pa
     assert keep["ref_count"] > 0                     # referenced copy, not just the shallowest path
 
 
-def test_civitai_found_rows_exist_without_image_path(tmp_path):
+def test_civitai_found_rows_have_image_path_for_thumbnails(tmp_path):
     conn = _seeded(tmp_path)
     rows = conn.execute("SELECT * FROM civitai WHERE found=1").fetchall()
     assert len(rows) >= 20                           # brief: ~24 identified
     for r in rows:
         assert r["name"]
-        # image_path is deliberately left unset here: the demo preview
-        # endpoint (a later task) maps sha256 -> bundled cover on its own.
-        assert r["image_path"] is None
+        # image_path must be non-NULL and point at a real bundled cover: the
+        # library gates a model's thumbnail on has_preview (= image_path IS NOT
+        # NULL), so leaving it NULL would render every demo card iconless.
+        assert r["image_path"] and os.path.exists(r["image_path"])
 
 
 def test_bundled_preview_covers_exist(tmp_path):
