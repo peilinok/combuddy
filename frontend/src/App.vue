@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import { getRoots } from "./api";
 import { useTheme } from "./useTheme";
 import { view, type View } from "./useNav";
+import { demo, useDemo } from "./useDemo";
 import DashboardView from "./components/DashboardView.vue";
 import LibraryView from "./components/LibraryView.vue";
 import WorkflowView from "./components/WorkflowView.vue";
@@ -12,6 +13,7 @@ import SettingsView from "./components/SettingsView.vue";
 import RootsSetup from "./components/RootsSetup.vue";
 
 useTheme(); // 接管换肤(首屏脚本已上好初始主题)
+useDemo(); // 一次性拉取 demo 标志,供本组件横幅 + 扫描按钮共享
 const { t } = useI18n();
 const configured = ref(true);
 const views = { dashboard: DashboardView, library: LibraryView, workflows: WorkflowView,
@@ -34,6 +36,9 @@ onMounted(async () => { const r = await getRoots(); configured.value = (r.roots?
       <Menu :model="items" class="w-full border-0 bg-transparent" />
     </aside>
     <main class="flex-1 p-6 overflow-auto">
+      <div v-if="demo" class="mb-4 px-3 py-2 rounded-lg bg-primary/20 text-primary text-xs font-medium">
+        {{ t("demo.banner") }}
+      </div>
       <RootsSetup v-if="!configured" @done="configured = true" />
       <component v-else :is="views[view]" />
     </main>

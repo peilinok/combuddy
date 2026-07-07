@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import { useDashboard } from "../useDashboard";
 import { humanSize } from "../format";
 import { view, cleanupTab } from "../useNav";
+import { demo } from "../useDemo";
 const { t } = useI18n();
 const { stats, scanning, error, startScan, cancelHash,
   refresh, startPolling, stopPolling } = useDashboard();
@@ -57,7 +58,7 @@ const knobs = computed(() => [
     <div v-if="error" class="text-orange-400 text-sm mb-3">{{ error }}</div>
     <div class="flex items-center justify-between mb-5">
       <h1 class="text-xl font-semibold">{{ t("dashboard.title") }}</h1>
-      <button @click="startScan" :disabled="scanning"
+      <button @click="startScan" :disabled="scanning || demo"
         class="px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold disabled:opacity-50">
         {{ scanning ? (stats.scan?.phase === 'hashing' ? t("dashboard.hashing") : stats.scan?.phase === 'enriching' ? t("dashboard.enriching") : t("dashboard.scanning")) : t("dashboard.scan") }}
       </button>

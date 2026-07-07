@@ -58,4 +58,7 @@ export default {
     title: "指认你的目录", modelDir: "模型目录(如 …/ComfyUI-Shared/models)",
     workflowDir: "workflow 目录(如 …/user/default/workflows)", saveAndScan: "保存并扫描",
   },
+  demo: {
+    banner: "演示数据 · 安装 combuddy 即可管理你自己的模型库",
+  },
 };
