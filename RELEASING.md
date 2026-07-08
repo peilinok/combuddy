@@ -43,3 +43,17 @@ you never depend on the committed `combuddy/web/` being fresh at release time.
   [TestPyPI](https://test.pypi.org) and temporarily point the publish step at TestPyPI
   (`with: repository-url: https://test.pypi.org/legacy/`), then `pip install -i
   https://test.pypi.org/simple/ combuddy`.
+
+## Desktop installers
+
+`desktop.yml` builds on the same `release: published` event as the PyPI workflow, so
+one GitHub Release ships PyPI + `.dmg` (macOS arm64, ad-hoc signed) + `.exe`
+(Windows x64, portable, unsigned — **beta** until real-machine verified).
+
+First-open on macOS (unsigned): System Settings → Privacy & Security → **Open Anyway**
+(older macOS: right-click the app → **Open**). Windows SmartScreen shows a first-run
+warning → **More info → Run anyway**.
+
+### Upgrading macOS to notarized (later, needs Apple Developer, US$99/yr)
+Add repo secrets `MACOS_CERT_P12`, `MACOS_CERT_PWD`, `APPLE_ID`, `APPLE_TEAM_ID`,
+`APPLE_APP_PWD`; the notarize step in `desktop.yml` runs when `MACOS_CERT_P12` is set.
