@@ -61,3 +61,10 @@ def test_stats_no_desktop_key_by_default():
     c = TestClient(api.create_app(":memory:"))
     s = c.get("/api/stats").json()
     assert s["desktop"] is False and "update" not in s
+
+
+def test_pyinstaller_spec_copies_metadata():
+    # 硬前提:漏了 copy_metadata,冻结产物 importlib.metadata 取不到版本 -> 更新检查静默失效
+    with open("packaging/combuddy.spec", "r", encoding="utf-8") as f:
+        spec = f.read()
+    assert 'copy_metadata("combuddy")' in spec or "copy_metadata('combuddy')" in spec
