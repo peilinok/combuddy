@@ -6,13 +6,15 @@ export interface Candidate {
   label: string; model_count: number | null; count_capped: boolean;
 }
 
-export function useDetect() {
-  const candidates = ref<Candidate[]>([]);
-  const skipped = ref(0);
-  const loading = ref(false);
-  const error = ref("");
-  const selected = ref<Set<string>>(new Set());
+// 模块级单例(仿 useDesktop/useDemo)—— RootsSetup 触发一次 load(),DetectPanel 渲染同一份状态,
+// 二者共享同一份 candidates/selected,而非各自独立的实例。
+export const candidates = ref<Candidate[]>([]);
+export const skipped = ref(0);
+export const loading = ref(false);
+export const error = ref("");
+export const selected = ref<Set<string>>(new Set());
 
+export function useDetect() {
   async function load() {
     loading.value = true; error.value = "";
     try {
