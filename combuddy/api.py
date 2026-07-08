@@ -17,7 +17,8 @@ def _sniff_image(path: str) -> str:
         return "image/webp"
     return "application/octet-stream"
 
-def create_app(db_path: str, static_dir: str | None = None, demo: bool = False) -> FastAPI:
+def create_app(db_path: str, static_dir: str | None = None, demo: bool = False,
+               desktop_state: dict | None = None) -> FastAPI:
     app = FastAPI(title="combuddy")
 
     def conn():
@@ -30,6 +31,9 @@ def create_app(db_path: str, static_dir: str | None = None, demo: bool = False) 
         s["scanning"] = scan_service.STATUS["running"]
         s["scan"] = dict(scan_service.STATUS)
         s["demo"] = demo
+        s["desktop"] = desktop_state is not None
+        if desktop_state and desktop_state.get("update"):
+            s["update"] = desktop_state["update"]
         c.close()
         return s
 
