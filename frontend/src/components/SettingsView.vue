@@ -2,12 +2,18 @@
 import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSettings } from "../useSettings";
+import { useDetect } from "../useDetect";
+import { useDesktop } from "../useDesktop";
 import { setLocale } from "../i18n";
 import ThemePicker from "./ThemePicker.vue";
+import DetectPanel from "./DetectPanel.vue";
 const { t, locale } = useI18n();
 const { settings, roots, error, load, save, addRoot } = useSettings();
+const { load: loadDetect } = useDetect();
+const { isDesktop, pickFolder } = useDesktop();
 const newKind = ref("model");
 const newPath = ref("");
+const showDetect = ref(false);
 onMounted(load);
 </script>
 <template>
@@ -50,8 +56,11 @@ onMounted(load);
       <div class="flex gap-2 mt-3">
         <select v-model="newKind" class="bg-surface-hover rounded px-2 text-sm"><option value="model">model</option><option value="workflow">workflow</option></select>
         <InputText v-model="newPath" :placeholder="t('settings.pathPlaceholder')" class="flex-1" />
+        <Button v-if="isDesktop" :label="t('setup.browse')" @click="pickFolder().then(p => p && (newPath = p))" />
         <Button :label="t('settings.add')" @click="newPath && addRoot(newKind, newPath).then(() => (newPath = ''))" />
       </div>
+      <button @click="showDetect = !showDetect; showDetect && loadDetect()" class="mt-2 text-xs text-primary underline">{{ t("detect.rescan") }}</button>
+      <DetectPanel v-if="showDetect" @done="showDetect = false; load()" />
     </Panel>
   </div>
 </template>

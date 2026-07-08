@@ -62,8 +62,13 @@ export default {
   detect: {
     scanning: "Detecting ComfyUI…", some: "some", useSelected: "Use selected & scan",
     skipped: "Detected {n} custom folder-name mapping(s) (e.g. A1111) — not supported in v1, add them manually.",
+    rescan: "Re-detect",
   },
   demo: {
     banner: "Demo data · install combuddy to manage your own library",
+  },
+  desktop: {
+    updateBanner: "combuddy {v} is available", updateGet: "Download ↗",
+    revealInFiles: "Show in Finder",
   },
 };

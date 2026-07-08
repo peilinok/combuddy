@@ -62,8 +62,13 @@ export default {
   detect: {
     scanning: "正在探测 ComfyUI…", some: "若干", useSelected: "使用所选并扫描",
     skipped: "检测到 {n} 个自定义目录名映射(如 A1111),v1 暂不支持,请手动添加。",
+    rescan: "重新探测",
   },
   demo: {
     banner: "演示数据 · 安装 combuddy 即可管理你自己的模型库",
+  },
+  desktop: {
+    updateBanner: "combuddy {v} 可下载", updateGet: "下载 ↗",
+    revealInFiles: "在 Finder 中显示",
   },
 };

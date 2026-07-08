@@ -4,7 +4,6 @@ import { useDetect } from "../useDetect";
 const { t } = useI18n();
 const emit = defineEmits<{ (e: "done"): void }>();
 const { candidates, skipped, loading, error, selected, toggle, confirm } = useDetect();
-defineExpose({ load: () => {} });
 async function go() { await confirm(); emit("done"); }
 </script>
 <template>
