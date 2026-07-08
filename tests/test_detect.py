@@ -55,6 +55,31 @@ def test_count_models_soft_timeout_returns_none(tmp_path):
     assert n is None and capped is False
 
 
+def test_count_models_entry_level_timeout_bounds_wide_dir(tmp_path, monkeypatch):
+    # Regression guard for the entry-level check inside `for i, e in enumerate(it):`,
+    # which is distinct from the outer per-directory check at the top of `while stack:`.
+    # `test_count_models_soft_timeout_returns_none` above trips the OUTER check (deadline
+    # already passed before scandir is even entered) and would stay green even if the
+    # entry-level check were reverted away -- this test targets the inner one specifically.
+    #
+    # `_count_models` is called on `d` directly (not tmp_path), so exactly one directory
+    # is ever pushed/popped: the outer per-directory check can fire only once, for `d`
+    # itself. That rules out the outer check "covering" for a removed inner check by
+    # tripping one level down (which is what happens if the 600 files sit in a subdirectory
+    # of the scanned root -- the outer check for that subdirectory would consume the
+    # past-deadline tick before the inner loop is ever reached, so both the current code
+    # and a reverted-to-`for e in it:` version would return (None, False) alike).
+    d = tmp_path / "checkpoints"; d.mkdir()
+    for i in range(600):                     # >512 so the periodic entry-check is exercised
+        (d / f"m{i}.safetensors").write_bytes(b"")
+    # tick[0] deadline calc, tick[1] outer while-check (for popping `d`) -- both before
+    # the deadline; tick[2] the in-loop check at i=0 sees a time far past it.
+    ticks = iter([0.0, 0.0] + [100.0] * 50)
+    monkeypatch.setattr(detect.time, "monotonic", lambda: next(ticks))
+    n, capped = detect._count_models(str(d), budget_s=1.0)
+    assert n is None and capped is False
+
+
 def test_count_models_ioerror_returns_none(tmp_path):
     n, capped = detect._count_models(str(tmp_path / "does-not-exist"))
     assert n is None and capped is False
