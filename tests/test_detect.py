@@ -40,6 +40,26 @@ def test_count_models_skips_trash(tmp_path):
     assert n == 1                                # trashed file not counted
 
 
+def test_count_models_caps_at_limit(tmp_path):
+    d = tmp_path / "checkpoints"; d.mkdir()
+    for i in range(4):
+        (d / f"m{i}.safetensors").write_bytes(b"x")
+    n, capped = detect._count_models(str(tmp_path), cap=3)   # cap param exists
+    assert n == 3 and capped is True
+
+
+def test_count_models_soft_timeout_returns_none(tmp_path):
+    d = tmp_path / "checkpoints"; d.mkdir()
+    (d / "m.safetensors").write_bytes(b"x")
+    n, capped = detect._count_models(str(tmp_path), budget_s=-1.0)  # deadline already passed
+    assert n is None and capped is False
+
+
+def test_count_models_ioerror_returns_none(tmp_path):
+    n, capped = detect._count_models(str(tmp_path / "does-not-exist"))
+    assert n is None and capped is False
+
+
 def test_sweep_finds_comfyui_install_model_and_workflow(tmp_path, monkeypatch):
     root = tmp_path / "ComfyUI"; _mk_comfy(str(root))
     (root / "models" / "checkpoints" / "a.safetensors").write_bytes(b"x")

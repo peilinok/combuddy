@@ -31,7 +31,9 @@ def _has_canonical_children(p: str) -> bool:
 
 
 def _count_models(path, cap=1000, max_depth=4, budget_s=1.0):
-    """(count, capped). Bounded (depth+cap) + soft-timeout (checked between entries).
+    """(count, capped). Bounded (depth+cap) + soft-timeout, checked between entries
+    (every 512 entries, so a single wide/flat directory is still bounded by budget_s)
+    and once per directory popped.
     (None, False) on IO error or budget exceeded before finishing -> UI shows "若干"."""
     deadline = time.monotonic() + budget_s
     count = 0
@@ -42,7 +44,9 @@ def _count_models(path, cap=1000, max_depth=4, budget_s=1.0):
         d, depth = stack.pop()
         try:
             with os.scandir(d) as it:
-                for e in it:
+                for i, e in enumerate(it):
+                    if (i & 0x1FF) == 0 and time.monotonic() > deadline:
+                        return (None, False)
                     try:
                         if e.is_dir(follow_symlinks=False):
                             if e.name == TRASH_DIRNAME or depth >= max_depth:
