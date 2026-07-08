@@ -20,7 +20,7 @@ classifiers = [
     "Framework :: FastAPI",
     "Topic :: Multimedia :: Graphics",
 ]
-dependencies = ["fastapi>=0.110", "uvicorn[standard]>=0.29"]
+dependencies = ["fastapi>=0.110", "uvicorn[standard]>=0.29", "pyyaml>=6"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "httpx>=0.27"]

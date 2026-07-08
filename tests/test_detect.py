@@ -116,3 +116,91 @@ def test_sweep_excludes_configured_roots(tmp_path, monkeypatch):
     already = {os.path.realpath(str(root / "models")).casefold()}
     res = detect.sweep(already)
     assert res["candidates"] == []               # the one model candidate is filtered out
+
+
+import textwrap
+
+
+def _write(p, text):
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(textwrap.dedent(text))
+
+
+def test_config_base_path_models_becomes_candidate(tmp_path, monkeypatch):
+    store = tmp_path / "central"
+    for t in ("checkpoints", "loras"):
+        os.makedirs(store / "models" / t)
+    cfg = tmp_path / "extra_model_paths.yaml"
+    _write(cfg, f"""
+        comfyui:
+          base_path: {store}
+          checkpoints: models/checkpoints
+          loras: models/loras
+    """)
+    monkeypatch.setattr(detect, "_seed_locations", lambda: [])
+    monkeypatch.setattr(detect, "_seed_config_files", lambda: [str(cfg)])
+    res = detect.sweep(set())
+    paths = {c["path"] for c in res["candidates"]}
+    assert os.path.realpath(str(store / "models")) in paths     # base_path/models canonical
+    assert res["skipped_config_mappings"] == 0
+
+
+def test_config_multiline_and_canonical_named_dirs(tmp_path, monkeypatch):
+    base = tmp_path / "b"
+    os.makedirs(base / "extra" / "loras")            # canonical basename 'loras'
+    os.makedirs(base / "extra" / "vae")
+    cfg = tmp_path / "extra_models_config.yaml"
+    _write(cfg, f"""
+        comfyui_desktop:
+          base_path: {base}
+          loras: |
+            extra/loras
+            extra/vae
+    """)
+    monkeypatch.setattr(detect, "_seed_locations", lambda: [])
+    monkeypatch.setattr(detect, "_seed_config_files", lambda: [str(cfg)])
+    res = detect.sweep(set())
+    paths = {c["path"] for c in res["candidates"]}
+    # each canonical-named mapped dir -> its parent (base/extra) is the model root
+    assert os.path.realpath(str(base / "extra")) in paths
+
+
+def test_config_a1111_noncanonical_skipped_and_counted(tmp_path, monkeypatch):
+    a = tmp_path / "sd-webui"
+    os.makedirs(a / "models" / "Stable-diffusion")
+    os.makedirs(a / "models" / "Lora")
+    cfg = tmp_path / "extra_model_paths.yaml"
+    _write(cfg, f"""
+        a1111:
+          base_path: {a}
+          checkpoints: models/Stable-diffusion
+          loras: models/Lora
+    """)
+    monkeypatch.setattr(detect, "_seed_locations", lambda: [])
+    monkeypatch.setattr(detect, "_seed_config_files", lambda: [str(cfg)])
+    res = detect.sweep(set())
+    assert res["candidates"] == []                   # nothing combuddy can scan correctly
+    assert res["skipped_config_mappings"] == 2       # both non-canonical mappings surfaced as a hint
+
+
+def test_config_custom_nodes_key_ignored(tmp_path, monkeypatch):
+    base = tmp_path / "b"; os.makedirs(base / "custom_nodes")
+    cfg = tmp_path / "extra_model_paths.yaml"
+    _write(cfg, f"""
+        comfyui:
+          base_path: {base}
+          custom_nodes: custom_nodes
+    """)
+    monkeypatch.setattr(detect, "_seed_locations", lambda: [])
+    monkeypatch.setattr(detect, "_seed_config_files", lambda: [str(cfg)])
+    res = detect.sweep(set())
+    assert res["candidates"] == [] and res["skipped_config_mappings"] == 0   # custom_nodes never a model dir
+
+
+def test_config_broken_yaml_is_silently_skipped(tmp_path, monkeypatch):
+    cfg = tmp_path / "extra_model_paths.yaml"
+    _write(cfg, "comfyui: : : not valid : yaml [")
+    monkeypatch.setattr(detect, "_seed_locations", lambda: [])
+    monkeypatch.setattr(detect, "_seed_config_files", lambda: [str(cfg)])
+    res = detect.sweep(set())                        # must not raise
+    assert res["candidates"] == [] and res["skipped_config_mappings"] == 0

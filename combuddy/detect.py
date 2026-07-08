@@ -10,6 +10,8 @@ import os
 import sys
 import time
 
+import yaml
+
 from .roles import KNOWN_DIR_TYPES
 from .scanner import MODEL_EXTS
 from .trash import TRASH_DIRNAME
@@ -130,8 +132,46 @@ def sweep(existing_realpaths: set[str]) -> dict:
     return {"candidates": cands, "skipped_config_mappings": skipped}
 
 
+_NON_DIR_KEYS = {"base_path", "is_default"}
+_SKIP_KEYS = {"custom_nodes"}   # code dir, never a model library
+
+
 def _consume_config(path, add) -> int:
-    """Parse a YAML config file and feed model-root candidates to add().
-    Returns count of non-canonical mappings skipped. Task 3 implements the body;
-    Task 2 stubs it so sweep() runs with zero config contribution."""
-    return 0
+    """Parse extra_model_paths.yaml / extra_models_config.yaml. Feed canonical
+    model-root candidates to add(); return count of non-canonical (A1111-style)
+    mappings we cannot scan correctly and therefore only surface as a hint.
+    Any parse/IO error -> treat as absent (return 0)."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except (OSError, yaml.YAMLError, UnicodeDecodeError):
+        return 0
+    if not isinstance(data, dict):
+        return 0
+    skipped = 0
+    for cfg in data.values():
+        if not isinstance(cfg, dict):
+            continue
+        base = os.path.expanduser(str(cfg.get("base_path", "")))
+        # 1) base_path itself (or its models/) as a canonical container
+        for cand in (os.path.join(base, "models"), base):
+            if base and os.path.isdir(cand) and _has_canonical_children(cand):
+                add("model", cand, "yaml", f"ComfyUI · {_short(base)}")
+        # 2) per-key mapped dirs (key = model type; value = dir, maybe multiline)
+        for key, val in cfg.items():
+            if key in _NON_DIR_KEYS or key in _SKIP_KEYS or not isinstance(val, str):
+                continue
+            for line in val.splitlines():
+                rel = line.strip()
+                if not rel:
+                    continue
+                d = rel if os.path.isabs(rel) else os.path.join(base, rel)
+                if not os.path.isdir(d):
+                    continue
+                if os.path.basename(d.rstrip("/\\")).casefold() in KNOWN_DIR_TYPES:
+                    parent = os.path.dirname(d.rstrip("/\\"))
+                    if _has_canonical_children(parent):
+                        add("model", parent, "yaml", f"ComfyUI · {_short(parent)}")
+                else:
+                    skipped += 1     # A1111-style non-canonical dir name -> v1 hint only
+    return skipped
