@@ -72,7 +72,7 @@ def _short(p: str) -> str:
 
 
 def _seed_locations() -> list[str]:
-    """Well-known ComfyUI install roots (and StabilityMatrix containers)."""
+    """Well-known ComfyUI install roots and Windows portable paths."""
     h = os.path.expanduser("~")
     seeds = [os.path.join(h, "ComfyUI"), os.path.join(h, "comfyui"),
              os.path.join(h, "Documents", "ComfyUI")]

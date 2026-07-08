@@ -18,7 +18,6 @@ def test_version_falls_back_when_metadata_missing(monkeypatch):
     importlib.reload(combuddy)   # restore real value for the rest of the suite
 
 
-import socket as _socket
 from fastapi.testclient import TestClient
 from combuddy import api, desktop
 
