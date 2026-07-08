@@ -57,6 +57,11 @@ export default {
   setup: {
     title: "指认你的目录", modelDir: "模型目录(如 …/ComfyUI-Shared/models)",
     workflowDir: "workflow 目录(如 …/user/default/workflows)", saveAndScan: "保存并扫描",
+    browse: "浏览…", manualInstead: "改为手动填写路径",
+  },
+  detect: {
+    scanning: "正在探测 ComfyUI…", some: "若干", useSelected: "使用所选并扫描",
+    skipped: "检测到 {n} 个自定义目录名映射(如 A1111),v1 暂不支持,请手动添加。",
   },
   demo: {
     banner: "演示数据 · 安装 combuddy 即可管理你自己的模型库",

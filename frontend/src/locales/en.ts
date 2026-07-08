@@ -57,6 +57,11 @@ export default {
   setup: {
     title: "Point to your directories", modelDir: "Model directory (e.g. …/ComfyUI-Shared/models)",
     workflowDir: "Workflow directory (e.g. …/user/default/workflows)", saveAndScan: "Save & Scan",
+    browse: "Browse…", manualInstead: "Enter paths manually",
+  },
+  detect: {
+    scanning: "Detecting ComfyUI…", some: "some", useSelected: "Use selected & scan",
+    skipped: "Detected {n} custom folder-name mapping(s) (e.g. A1111) — not supported in v1, add them manually.",
   },
   demo: {
     banner: "Demo data · install combuddy to manage your own library",
