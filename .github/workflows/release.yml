@@ -1,37 +1,118 @@
-name: Release to PyPI
+name: Release
 
-# Publishing a GitHub Release (with a tag like v0.1.0) builds the frontend,
-# builds the wheel + sdist, and publishes to PyPI via Trusted Publishing (OIDC,
-# no API token). One-time PyPI setup is in RELEASING.md.
+# Single entry point: Actions -> Release -> Run workflow -> type the version.
+# This orchestrates version bump, tag, draft release, PyPI publish, desktop
+# assets, and final release publication in one run.
 
-on:
-  release:
-    types: [published]
+'on':
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 0.3.0 (no leading v)"
+        required: true
+        type: string
 
-permissions:
-  contents: read
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  publish:
+  prepare:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write        # required for PyPI Trusted Publishing (OIDC)
+      contents: write
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
     steps:
+      - name: Guard main branch
+        run: |
+          test "$GITHUB_REF" = "refs/heads/main" || { echo "::error::Release workflow must be run from main."; exit 1; }
+
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Check release tag matches pyproject version
+      - name: Prepare release metadata
+        id: meta
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT: ${{ inputs.version }}
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
-          VER=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
-          echo "release tag=$TAG  pyproject version=$VER"
-          if [ "$TAG" != "$VER" ]; then
-            echo "::error::Release tag ($TAG) != pyproject version ($VER). Bump the version and re-tag."
-            exit 1
+          set -euo pipefail
+
+          VERSION="$(python scripts/release_prepare.py normalize "$INPUT")"
+          TAG="v$VERSION"
+
+          curl -fsSL "https://pypi.org/pypi/combuddy/json" | python scripts/release_prepare.py pypi-check "$VERSION"
+
+          CURRENT="$(python - <<'PY'
+          import tomllib
+
+          with open("pyproject.toml", "rb") as f:
+              print(tomllib.load(f)["project"]["version"])
+          PY
+          )"
+          if [ "$(python scripts/release_prepare.py needs-bump "$CURRENT" "$VERSION")" = "bump" ]; then
+            sed -i -E 's/^version = .*/version = "'"$VERSION"'"/' pyproject.toml
+            VERSION="$VERSION" python - <<'PY'
+          import os
+          import tomllib
+
+          with open("pyproject.toml", "rb") as f:
+              assert tomllib.load(f)["project"]["version"] == os.environ["VERSION"]
+          PY
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add pyproject.toml
+            git commit -m "chore(release): $VERSION"
+            git push origin HEAD:main
           fi
+
+          HEAD="$(git rev-parse HEAD)"
+          REMOTE_TAG="$(git ls-remote --tags origin "refs/tags/$TAG" | awk '!/\^\{\}$/ {print $1}')"
+          if [ -n "$REMOTE_TAG" ]; then
+            if [ "$REMOTE_TAG" != "$HEAD" ]; then
+              echo "::error::Tag $TAG exists but points to $REMOTE_TAG, not $HEAD."
+              exit 1
+            fi
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+
+          if DRAFT="$(gh release view "$TAG" --json isDraft -q .isDraft 2>/dev/null)"; then
+            if [ "$DRAFT" != "true" ]; then
+              echo "::error::Release $TAG already exists and is not a draft."
+              exit 1
+            fi
+          else
+            gh release create "$TAG" --draft --generate-notes --verify-tag
+          fi
+
+          {
+            echo "version=$VERSION"
+            echo "tag=$TAG"
+          } >> "$GITHUB_OUTPUT"
+
+  pypi-build:
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - uses: actions/setup-node@v4
         with:
@@ -39,11 +120,9 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Build frontend (fresh bundle into combuddy/web)
+      - name: Build frontend
         working-directory: frontend
-        run: |
-          npm ci
-          npm run build
+        run: npm ci && npm run build
 
       - name: Build sdist + wheel
         run: |
@@ -54,11 +133,113 @@ jobs:
         run: |
           python - <<'PY'
           import glob, zipfile
+
           whl = sorted(glob.glob("dist/*.whl"))[-1]
           names = zipfile.ZipFile(whl).namelist()
           assert any(n.endswith("combuddy/web/index.html") for n in names), "frontend missing from wheel!"
           print("ok:", whl, "bundles the frontend")
           PY
 
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  pypi-publish:
+    needs: pypi-build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+
+  desktop:
+    needs: prepare
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            asset: combuddy-macos-arm64.dmg
+          - os: windows-2022
+            asset: combuddy-windows-x64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm ci && npm run build
+
+      - name: Install
+        run: pip install ".[desktop]" pyinstaller
+
+      - name: PyInstaller
+        working-directory: packaging
+        run: pyinstaller combuddy.spec --noconfirm
+
+      - name: Package macOS dmg (ad-hoc signed)
+        if: runner.os == 'macOS'
+        working-directory: packaging
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+        run: |
+          codesign --force --deep -s - dist/combuddy.app
+          # TODO: notarization is a placeholder only; no notarytool/staple runs here.
+          # TODO: wire real Developer ID signing and notarization in a later task.
+          if [ -n "$MACOS_CERT_P12" ]; then echo "MACOS_CERT_P12 is present; notarization placeholder only."; fi
+          hdiutil create -volname combuddy -srcfolder dist/combuddy.app -ov -format UDZO dist/combuddy-macos-arm64.dmg
+
+      - name: Rename Windows exe
+        if: runner.os == 'Windows'
+        shell: bash
+        working-directory: packaging
+        run: mv dist/combuddy.exe dist/combuddy-windows-x64.exe
+
+      - name: Upload asset
+        shell: bash
+        working-directory: packaging
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ needs.prepare.outputs.tag }}" "dist/${{ matrix.asset }}" --clobber
+
+  finalize:
+    needs: [prepare, pypi-publish, desktop]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Assert release jobs succeeded
+        run: |
+          if [ "${{ needs.pypi-publish.result }}" != "success" ] || [ "${{ needs.desktop.result }}" != "success" ]; then
+            echo "::error::Release jobs did not all succeed: pypi-publish=${{ needs.pypi-publish.result }}, desktop=${{ needs.desktop.result }}"
+            exit 1
+          fi
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false
