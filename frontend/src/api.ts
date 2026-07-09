@@ -32,3 +32,4 @@ export const getSettings = () => fetch("/api/settings").then(jsonOrThrow);
 export const setSettings = (s: Record<string, unknown>) =>
   fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify(s) }).then(jsonOrThrow);
+export const fetchDetect = () => fetch("/api/detect").then(jsonOrThrow);

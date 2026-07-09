@@ -2,12 +2,14 @@
 import { onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useLibrary } from "../useLibrary";
+import { useDesktop } from "../useDesktop";
 import { humanSize } from "../format";
 import { displayLabel, isIdentified } from "../labels";
 import ModelCard from "./ModelCard.vue";
 const { t } = useI18n();
 const { models, selected, search, flag, layout, revealed, lightbox, load, openDetail, error,
   shouldBlur, reveal, openLightbox, closeLightbox, typeFilter, collapsed, typeCounts, visibleModels } = useLibrary();
+const { isDesktop, reveal: revealInFinder, openExternal } = useDesktop();
 function onKey(e: KeyboardEvent) { if (e.key === "Escape") closeLightbox(); }
 onMounted(() => { load(); window.addEventListener("keydown", onKey); });
 onUnmounted(() => window.removeEventListener("keydown", onKey));
@@ -84,6 +86,7 @@ function setFlag(f: string) { flag.value = flag.value === f ? "" : f; load(); }
         </DataView>
         <div v-if="selected" class="bg-surface-card rounded p-3 text-xs mt-4">
           <div class="text-color-secondary mb-1">{{ selected.dir_type }} · {{ displayLabel(selected, t) }} · {{ selected.precision || '—' }} · {{ humanSize(selected.size) }}</div>
+          <button v-if="isDesktop" @click="revealInFinder(selected.path)" class="text-color-secondary text-[11px] underline">{{ t("desktop.revealInFiles") }}</button>
           <div class="text-color-secondary font-mono text-[11px] break-all">
             {{ t("library.sha256") }} {{ selected.sha256 || t("library.notHashed") }}
           </div>
@@ -97,7 +100,7 @@ function setFlag(f: string) { flag.value = flag.value === f ? "" : f; load(); }
                   <span class="text-color-secondary font-normal">· {{ selected.civitai_base }} · {{ selected.civitai_type }}</span></div>
                 <div v-if="JSON.parse(selected.trigger_words || '[]').length" class="text-color-secondary mt-1">
                   {{ t("library.triggerWords") }}<code v-for="tw in JSON.parse(selected.trigger_words)" :key="tw" class="mr-1 px-1 bg-surface-hover rounded">{{ tw }}</code></div>
-                <a :href="selected.civitai_url" target="_blank" class="text-primary text-[11px]">{{ t("library.viewOnCivitai") }}</a>
+                <a :href="selected.civitai_url" target="_blank" @click="isDesktop && ($event.preventDefault(), openExternal(selected.civitai_url))" class="text-primary text-[11px]">{{ t("library.viewOnCivitai") }}</a>
               </div>
             </div>
           </div>

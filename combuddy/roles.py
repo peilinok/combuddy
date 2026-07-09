@@ -8,6 +8,8 @@ _ROLES = {
 }
 # dir_types where base architecture is the meaningful identity
 _BASE_TYPES = {"checkpoints", "unet", "diffusion_models", "loras"}
+# every dir_type combuddy recognizes (role dirs + base-arch dirs), casefolded for matching
+KNOWN_DIR_TYPES = {d.casefold() for d in set(_ROLES) | _BASE_TYPES}
 
 def role_for(dir_type: str) -> str | None:
     if dir_type in _BASE_TYPES:

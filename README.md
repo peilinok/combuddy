@@ -48,7 +48,23 @@ combuddy         # scan your own model library and workflows
 combuddy demo    # zero-config tour: bundled sample data, no local library needed
 ```
 
-`combuddy` starts a local server on `http://127.0.0.1:8511` and opens your browser. On first run, point it at your ComfyUI **models** directory and **workflows** directory (e.g. `.../user/default/workflows`); it scans and populates the Dashboard in seconds. No library handy? `combuddy demo` seeds a temporary database with bundled sample models and workflows and opens the same UI — a full tour, no setup required.
+`combuddy` starts a local server on `http://127.0.0.1:8511` and opens your browser. On first run it **auto-detects** common ComfyUI installs (including the official Comfy Desktop) and offers them for one-click confirmation; if your library lives somewhere custom, you can point it there manually. It scans and populates the Dashboard in seconds. No library handy? `combuddy demo` seeds a temporary database with bundled sample models and workflows and opens the same UI — a full tour, no setup required.
+
+## Desktop app
+
+Prefer not to touch a terminal? Download the desktop app — no Python, no command line:
+
+- **macOS (Apple Silicon):** `combuddy-macos-arm64.dmg`
+- **Windows (x64):** `combuddy-windows-x64.exe` *(beta)*
+
+Get the latest from the [**Releases**](https://github.com/peilinok/combuddy/releases/latest) page, then double-click to run. It bundles everything and opens combuddy in a native window; first launch auto-detects your ComfyUI.
+
+The app is not yet code-signed, so the OS shows a one-time warning on first open:
+
+- **macOS:** the first time, open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** (older macOS: right-click the app in Finder → **Open** → confirm).
+- **Windows:** SmartScreen may say "Windows protected your PC" → **More info → Run anyway**.
+
+The desktop app checks GitHub once at startup for a newer release. That request sends only a version query — **no model data, paths, or usage** — though, like any web request, GitHub sees your IP and user agent. The CLI and browser modes never make this check.
 
 ## How it works
 

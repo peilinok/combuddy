@@ -2,7 +2,7 @@ import os, re, threading
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-from . import db as dbm, config, stats, scan_service, queries, trash
+from . import db as dbm, config, stats, scan_service, queries, trash, detect
 
 _DEMO_PREVIEWS_DIR = os.path.join(os.path.dirname(__file__), "demo", "previews")
 
@@ -17,7 +17,8 @@ def _sniff_image(path: str) -> str:
         return "image/webp"
     return "application/octet-stream"
 
-def create_app(db_path: str, static_dir: str | None = None, demo: bool = False) -> FastAPI:
+def create_app(db_path: str, static_dir: str | None = None, demo: bool = False,
+               desktop_state: dict | None = None) -> FastAPI:
     app = FastAPI(title="combuddy")
 
     def conn():
@@ -30,6 +31,9 @@ def create_app(db_path: str, static_dir: str | None = None, demo: bool = False) 
         s["scanning"] = scan_service.STATUS["running"]
         s["scan"] = dict(scan_service.STATUS)
         s["demo"] = demo
+        s["desktop"] = desktop_state is not None
+        if desktop_state and desktop_state.get("update"):
+            s["update"] = desktop_state["update"]
         c.close()
         return s
 
@@ -44,6 +48,13 @@ def create_app(db_path: str, static_dir: str | None = None, demo: bool = False) 
     def post_roots(body: dict):
         c = conn(); config.set_roots(c, body.get("roots", [])); c.close()
         return {"ok": True}
+
+    @app.get("/api/detect")
+    def get_detect():
+        c = conn()
+        existing = {os.path.realpath(r["path"]).casefold() for r in config.get_roots(c)}
+        c.close()
+        return detect.sweep(existing)
 
     @app.get("/api/unreferenced")
     def get_unreferenced():

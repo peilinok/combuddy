@@ -16,6 +16,10 @@ dist/
 node_modules/
 frontend/dist/
 
+# Packaging (icon build intermediates; committed artifacts are combuddy.icns/.ico)
+packaging/icons/_icon.png
+packaging/icons/*.iconset/
+
 # macOS
 .DS_Store
 
