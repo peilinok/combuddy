@@ -20,40 +20,69 @@ Publishing** — no API tokens are stored anywhere.
 
 ## Cutting a release
 
+One action does everything: version bump, tag, GitHub Release, PyPI publish, and
+desktop `.dmg` / `.exe` assets.
+
 1. Make sure `main` is green (the CI workflow passes).
-2. **Bump the version** in `pyproject.toml` (e.g. `0.1.0` → `0.1.1`), commit, and push to `main`.
-   PyPI versions are **immutable** — a version can never be re-uploaded, so every release needs
-   a new number. (Semver: patch = fixes, minor = features, major = breaking.)
-3. On GitHub → **Releases → Draft a new release**:
-   - **Tag:** `v<version>` — must match `pyproject.toml` exactly (e.g. `v0.1.1`), targeting `main`.
-   - Write notes, then **Publish release**.
-4. `release.yml` runs automatically: it checks the tag matches the version, rebuilds the frontend,
-   builds the wheel + sdist, verifies the frontend is bundled, and publishes to PyPI. Watch it in
-   the **Actions** tab.
-5. Verify it landed: `pipx install combuddy` (or `uvx combuddy`) → the `combuddy` command should
-   start the server and serve the UI.
+2. Go to GitHub → **Actions** → **Release** → **Run workflow**.
+3. Select the `main` branch and enter the release version with no leading `v`
+   (for example, `0.3.0`).
+4. The workflow hard-checks that the version is semver and not already on PyPI.
+5. The workflow idempotently bumps `pyproject.toml`, commits that bump to `main`,
+   and creates tag `vX.Y.Z`.
+   - If the tag does not exist, the workflow creates it.
+   - If the tag already exists, it must point at the current `main` HEAD.
+6. The workflow creates a draft GitHub Release, publishes PyPI, builds and uploads
+   the macOS `.dmg` and Windows `.exe`, then publishes the GitHub Release.
+7. Verify the release:
+   - `pipx install combuddy` (or `uvx combuddy`) should start the server and serve the UI.
+   - GitHub Releases should contain the desktop assets.
+
+`combuddy.__version__` is read from package metadata, so only `pyproject.toml`
+is bumped. After a release, run `git pull` locally so your `main` has the release
+commit and tag.
 
 The frontend is rebuilt in CI on every release, so the published wheel always ships a current UI —
 you never depend on the committed `combuddy/web/` being fresh at release time.
 
+### If a release half-fails
+
+- Transient failure before PyPI publish succeeds: use **Re-run failed jobs**, or
+  rerun the whole workflow with the same version. The prepare step is idempotent.
+- Transient failure after PyPI publish succeeds: use **Re-run failed jobs** only.
+  Do not rerun the whole workflow, because the PyPI pre-check will block the
+  already-published version.
+- Code or workflow bug before PyPI publish succeeds: rerunning will replay the
+  old commit. Fix `main`, delete the tag and draft release with
+  `gh release delete vX.Y.Z --cleanup-tag`, then run the workflow again.
+- Code or workflow bug after PyPI publish succeeds: the version is burned. Manually
+  attach any missing Release assets, or ship a new patch version.
+
 ## Dry run (optional)
 
 - Build locally without publishing: `python -m build` → inspect `dist/`.
-- For a full end-to-end rehearsal, add a matching pending publisher on
-  [TestPyPI](https://test.pypi.org) and temporarily point the publish step at TestPyPI
-  (`with: repository-url: https://test.pypi.org/legacy/`), then `pip install -i
-  https://test.pypi.org/simple/ combuddy`.
+- Do not run a TestPyPI end-to-end dry run from this repository. The release
+  workflow intentionally writes to real `main`, creates real tags, and creates a
+  real GitHub Release, so a TestPyPI rehearsal would still pollute production
+  release state.
 
 ## Desktop installers
 
-`desktop.yml` builds on the same `release: published` event as the PyPI workflow, so
-one GitHub Release ships PyPI + `.dmg` (macOS arm64, ad-hoc signed) + `.exe`
-(Windows x64, portable, unsigned — **beta** until real-machine verified).
+The `desktop` job in `release.yml` runs during the same release workflow as PyPI.
+It builds a macOS `.dmg` (arm64, ad-hoc signed) and Windows `.exe` (x64 portable,
+unsigned beta), then uploads both files to the GitHub Release.
 
 First-open on macOS (unsigned): System Settings → Privacy & Security → **Open Anyway**
 (older macOS: right-click the app → **Open**). Windows SmartScreen shows a first-run
 warning → **More info → Run anyway**.
 
-### Upgrading macOS to notarized (later, needs Apple Developer, US$99/yr)
-Add repo secrets `MACOS_CERT_P12`, `MACOS_CERT_PWD`, `APPLE_ID`, `APPLE_TEAM_ID`,
-`APPLE_APP_PWD`; the notarize step in `desktop.yml` runs when `MACOS_CERT_P12` is set.
+### macOS notarization is not implemented yet (TODO)
+
+The current workflow only does ad-hoc signing. `MACOS_CERT_P12` is a placeholder
+echo in `release.yml`; there is no `notarytool` submit step and no `stapler staple`
+step yet.
+
+To ship a notarized macOS build later, add an Apple Developer account, repo secrets
+for the Developer ID certificate and notarization credentials, re-sign with
+Developer ID plus hardened runtime, run `notarytool submit --wait`, then run
+`stapler staple` on the final app or disk image.
