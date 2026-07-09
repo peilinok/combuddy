@@ -72,6 +72,12 @@ The `desktop` job in `release.yml` runs during the same release workflow as PyPI
 It builds a macOS `.dmg` (arm64, ad-hoc signed) and Windows `.exe` (x64 portable,
 unsigned beta), then uploads both files to the GitHub Release.
 
+For a manual desktop-only build, go to GitHub → **Actions** → **Desktop builds** →
+**Run workflow**. Leave `ref` blank to build the selected branch/ref, or set
+`release_tag` (for example, `v0.3.0`) to build that tag and upload/replace assets
+on an existing GitHub Release. The workflow always uploads the `.dmg` and `.exe`
+as Actions artifacts.
+
 First-open on macOS (unsigned): System Settings → Privacy & Security → **Open Anyway**
 (older macOS: right-click the app → **Open**). Windows SmartScreen shows a first-run
 warning → **More info → Run anyway**.
