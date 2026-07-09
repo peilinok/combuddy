@@ -1,11 +1,19 @@
 name: Desktop builds
 
-on:
-  release:
-    types: [published]
+'on':
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag, or SHA to build. Leave blank to use the selected ref."
+        required: false
+        type: string
+      release_tag:
+        description: "Optional existing GitHub Release tag to upload assets to, e.g. v0.3.0."
+        required: false
+        type: string
 
 permissions:
-  contents: write        # upload release assets
+  contents: write
 
 jobs:
   build:
@@ -13,47 +21,82 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14        # arm64, pinned (not macos-latest — it migrates)
+          - os: macos-14
             asset: combuddy-macos-arm64.dmg
           - os: windows-2022
             asset: combuddy-windows-x64.exe
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
-      - name: Check release tag matches pyproject version
+      - name: Resolve build ref
+        id: build-ref
         shell: bash
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          DEFAULT_REF: ${{ github.ref }}
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
-          VER=$(python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
-          test "$TAG" = "$VER" || { echo "::error::tag $TAG != version $VER"; exit 1; }
+          if [ -n "$INPUT_REF" ]; then
+            echo "ref=$INPUT_REF" >> "$GITHUB_OUTPUT"
+          elif [ -n "$RELEASE_TAG" ]; then
+            echo "ref=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=$DEFAULT_REF" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.build-ref.outputs.ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - uses: actions/setup-node@v4
-        with: { node-version: "20", cache: npm, cache-dependency-path: frontend/package-lock.json }
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
       - name: Build frontend
         working-directory: frontend
         run: npm ci && npm run build
+
       - name: Install
         run: pip install ".[desktop]" pyinstaller
+
       - name: PyInstaller
         working-directory: packaging
         run: pyinstaller combuddy.spec --noconfirm
+
       - name: Package macOS dmg (ad-hoc signed)
         if: runner.os == 'macOS'
         working-directory: packaging
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
         run: |
           codesign --force --deep -s - dist/combuddy.app
-          # notarize only when signing secrets are present; otherwise ad-hoc + skip
-          if [ -n "${{ secrets.MACOS_CERT_P12 }}" ]; then echo "notarize path (secrets present) — see RELEASING.md"; fi
+          # TODO: notarization is a placeholder only; no notarytool/staple runs here.
+          # TODO: wire real Developer ID signing and notarization in a later task.
+          if [ -n "$MACOS_CERT_P12" ]; then echo "MACOS_CERT_P12 is present; notarization placeholder only."; fi
           hdiutil create -volname combuddy -srcfolder dist/combuddy.app -ov -format UDZO dist/combuddy-macos-arm64.dmg
+
       - name: Rename Windows exe
         if: runner.os == 'Windows'
         shell: bash
         working-directory: packaging
         run: mv dist/combuddy.exe dist/combuddy-windows-x64.exe
-      - name: Upload asset
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: packaging/dist/${{ matrix.asset }}
+          retention-days: 14
+
+      - name: Upload release asset
+        if: ${{ inputs.release_tag != '' }}
         shell: bash
         working-directory: packaging
-        run: gh release upload "$GITHUB_REF_NAME" "dist/${{ matrix.asset }}" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release upload "${{ inputs.release_tag }}" "dist/${{ matrix.asset }}" --clobber
