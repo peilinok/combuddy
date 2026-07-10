@@ -111,6 +111,19 @@ def _show_windows_message(title: str, message: str) -> None:
         pass
 
 
+def _fatal(message: str) -> None:
+    """windowed(console=False) 构建里 print 无处可去:把致命启动错误写进日志并弹窗。"""
+    try:
+        path = os.path.join(os.path.expanduser("~"), ".combuddy", "combuddy-desktop.log")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(message + "\n")
+    except Exception:
+        pass
+    print(message)                      # 从控制台启动时仍能看到
+    _show_windows_message("combuddy", message)
+
+
 class Bridge:
     """Exposed to the page as window.pywebview.api.* — validates every input."""
 
@@ -140,7 +153,7 @@ def run_desktop() -> int:
     try:
         import webview                  # lazy: desktop extra only
     except ImportError:
-        print('desktop UI needs the extra: pip install "combuddy[desktop]"')
+        _fatal('desktop UI needs the extra: pip install "combuddy[desktop]"')
         return 1
     import uvicorn
     from .__main__ import build_app
@@ -153,7 +166,7 @@ def run_desktop() -> int:
     t.start()                           # off-main-thread -> uvicorn skips signal handlers
     ready = _wait_ready(port)
     if not ready and not t.is_alive():  # server thread died during startup -> real failure
-        print("combuddy server failed to start (see log above)")
+        _fatal("combuddy server failed to start (see log above)")
         return 1
     threading.Thread(target=_check_update, args=(state,), daemon=True).start()
     url = f"http://127.0.0.1:{port}"
@@ -166,12 +179,37 @@ def run_desktop() -> int:
         webbrowser.open(url)
         t.join()
         return 0
+    fell_back = {"v": False}
+
+    def _watch_blank(window):
+        """若干秒后 #app 仍为空 -> 判定原生窗口白屏,退回系统浏览器,别让用户干瞪空窗。"""
+        time.sleep(4)                    # 给前端挂载留足时间(实测 Vue 首屏 < 1.5s)
+        try:
+            blank = window.evaluate_js(
+                "(function(){var a=document.getElementById('app');"
+                "return !a||a.innerHTML.trim().length===0;})()")
+        except Exception:
+            return                       # 探测失败不打扰,交回正常流程
+        if blank:
+            fell_back["v"] = True
+            webbrowser.open(url)
+            _show_windows_message(
+                "combuddy", "原生窗口未能渲染界面,已改用系统浏览器打开 combuddy。")
+            try:
+                window.destroy()         # 关掉白屏窗口 -> webview.start 返回
+            except Exception:
+                pass
+
     try:
-        webview.create_window("combuddy", url, js_api=Bridge(),
+        window = webview.create_window("combuddy", url, js_api=Bridge(),
                               width=1280, height=820, min_size=(900, 600))
+        threading.Thread(target=_watch_blank, args=(window,), daemon=True).start()
         gui = "edgechromium" if os.name == "nt" else None
         webview.start(gui=gui)           # blocks until the window is closed
     except Exception:
         webbrowser.open(url)            # webview backend unavailable but server is up
         t.join()                        # serve the tab; RETURN if the server thread dies
+        return 0
+    if fell_back["v"]:                  # 白屏兜底后保持进程存活,继续服务浏览器标签
+        t.join()
     return 0
