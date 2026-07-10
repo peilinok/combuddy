@@ -7,16 +7,14 @@ Publishing** — no API tokens are stored anywhere.
 ## One-time setup (on PyPI)
 
 1. Create/verify a PyPI account at https://pypi.org.
-2. Add a **pending** Trusted Publisher (the project doesn't exist yet, so it must be "pending"):
-   PyPI → account → **Publishing** → *Add a pending publisher*:
+2. If Trusted Publishing is not already configured, add a Trusted Publisher for
+   the existing `combuddy` project:
+   PyPI → `combuddy` project → **Publishing** → **Add a publisher**:
    - **PyPI Project Name:** `combuddy`
    - **Owner:** `peilinok`
    - **Repository name:** `combuddy`
    - **Workflow name:** `release.yml`
    - **Environment name:** *(leave blank)*
-
-   After the first successful publish, `combuddy` exists on PyPI and this becomes a normal
-   trusted publisher.
 
 ## Cutting a release
 
@@ -33,10 +31,11 @@ desktop `.dmg` / `.exe` assets.
    - If the tag does not exist, the workflow creates it.
    - If the tag already exists, it must point at the current `main` HEAD.
 6. The workflow creates a draft GitHub Release, publishes PyPI, builds and uploads
-   the macOS `.dmg` and Windows `.exe`, then publishes the GitHub Release.
+   the versioned macOS `.dmg` and Windows `.exe`, then publishes the GitHub Release.
 7. Verify the release:
    - `pipx install combuddy` (or `uvx combuddy`) should start the server and serve the UI.
-   - GitHub Releases should contain the desktop assets.
+   - GitHub Releases should contain `combuddy-X.Y.Z-macos-arm64.dmg` and
+     `combuddy-X.Y.Z-windows-x64.exe`.
 
 `combuddy.__version__` is read from package metadata, so only `pyproject.toml`
 is bumped. After a release, run `git pull` locally so your `main` has the release
@@ -69,14 +68,16 @@ you never depend on the committed `combuddy/web/` being fresh at release time.
 ## Desktop installers
 
 The `desktop` job in `release.yml` runs during the same release workflow as PyPI.
-It builds a macOS `.dmg` (arm64, ad-hoc signed) and Windows `.exe` (x64 portable,
-unsigned beta), then uploads both files to the GitHub Release.
+It builds `combuddy-X.Y.Z-macos-arm64.dmg` (arm64, ad-hoc signed) and
+`combuddy-X.Y.Z-windows-x64.exe` (x64 portable, unsigned beta), then uploads both
+files to the GitHub Release.
 
 For a manual desktop-only build, go to GitHub → **Actions** → **Desktop builds** →
 **Run workflow**. Leave `ref` blank to build the selected branch/ref, or set
 `release_tag` (for example, `v0.3.0`) to build that tag and upload/replace assets
-on an existing GitHub Release. The workflow always uploads the `.dmg` and `.exe`
-as Actions artifacts.
+on an existing GitHub Release. The workflow always uploads the versioned `.dmg`
+and `.exe` as Actions artifacts. If `release_tag` is omitted, the asset version
+comes from the checked-out `pyproject.toml`.
 
 First-open on macOS (unsigned): System Settings → Privacy & Security → **Open Anyway**
 (older macOS: right-click the app → **Open**). Windows SmartScreen shows a first-run

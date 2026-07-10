@@ -54,21 +54,33 @@ combuddy demo    # zero-config tour: bundled sample data, no local library neede
 
 Prefer not to touch a terminal? Download the desktop app — no Python, no command line:
 
-- **macOS (Apple Silicon):** `combuddy-macos-arm64.dmg`
-- **Windows (x64):** `combuddy-windows-x64.exe` *(beta)*
+- **macOS (Apple Silicon):** `combuddy-X.Y.Z-macos-arm64.dmg`
+- **Windows (x64):** `combuddy-X.Y.Z-windows-x64.exe` *(beta)*
 
-Get the latest from the [**Releases**](https://github.com/peilinok/combuddy/releases/latest) page, then double-click to run. It bundles everything and opens combuddy in a native window; first launch auto-detects your ComfyUI.
+Get the latest from the [**Releases**](https://github.com/peilinok/combuddy/releases/latest) page. On macOS, open the DMG and drag `combuddy.app` into Applications; on Windows, run the `.exe`. It bundles everything and opens combuddy in a native window; first launch auto-detects your ComfyUI.
 
-The app is not yet code-signed, so the OS shows a one-time warning on first open:
+### Unsigned app warnings
 
-- **macOS:** the first time, open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** (older macOS: right-click the app in Finder → **Open** → confirm).
-- **Windows:** SmartScreen may say "Windows protected your PC" → **More info → Run anyway**.
+The desktop app is not yet code-signed or notarized, so macOS and Windows cannot
+verify the publisher on first open. Download it only from the
+[Releases](https://github.com/peilinok/combuddy/releases/latest) page, then use
+the OS-provided one-time override:
+
+- **macOS:** after the first blocked launch, open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**. On older macOS versions, right-click `combuddy.app` in Finder → **Open** → confirm.
+- **Windows:** SmartScreen may say "Windows protected your PC". Click **More info** → **Run anyway**.
 
 Windows also needs Microsoft Edge WebView2 Runtime for the native window. If it
 is missing, combuddy shows a notice and opens the same local app in your browser
 instead of showing a blank window.
 
 The desktop app checks GitHub once at startup for a newer release. That request sends only a version query — **no model data, paths, or usage** — though, like any web request, GitHub sees your IP and user agent. The CLI and browser modes never make this check.
+
+Advanced terminal install for the same native window:
+
+```bash
+pipx install "combuddy[desktop]"   # or: pip install "combuddy[desktop]"
+combuddy desktop
+```
 
 ## How it works
 
@@ -99,4 +111,4 @@ After changing anything in `frontend/src`, run `npm run build` — the packaged 
 
 ## Status & roadmap
 
-v1.2 — local-first with optional Civitai enrichment (real names, preview images, trigger words by content hash, default on and toggleable). Planned next: download center for missing models, and dependency pinning for shareable, self-healing workflows.
+Local-first, with optional Civitai enrichment (real names, preview images, and trigger words looked up by content hash — default on, toggleable) and a native **desktop app** for macOS and Windows with zero-config ComfyUI detection. Planned next: a download center for missing models, and dependency pinning for shareable, self-healing workflows.

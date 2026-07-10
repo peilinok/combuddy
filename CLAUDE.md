@@ -4,19 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-combuddy is a **local-first** tool: it scans a ComfyUI model library and workflow files, maps the model↔workflow dependency graph, and serves a dark web UI (Dashboard, model library, workflow resolution, cleanup). Model identity (base architecture, precision, parameters) is computed from file headers; content hashes are calculated locally. Optional Civitai enrichment (real names, previews, trigger words) queries by hash only and is default on but toggleable in settings. A single `combuddy` command starts a FastAPI server and opens the browser.
+combuddy is a **local-first** tool: it scans a ComfyUI model library and workflow files, maps the model↔workflow dependency graph, and serves a themeable web UI (Dashboard with data-viz, model library, workflow resolution, cleanup incl. duplicate detection, settings). Model identity (base architecture, precision, parameters) is computed from file headers; content hashes are calculated locally. Optional Civitai enrichment (real names, previews, trigger words) queries by hash only and is default on but toggleable in settings.
+
+**Three forms, one codebase** (the split is load-bearing — see the demo/desktop sections below): `combuddy` runs a FastAPI server and opens the browser; `combuddy demo` opens the same UI on bundled synthetic data (throwaway DB, never touches `~/.combuddy`, no network); `combuddy desktop` shows the same app in a native window (pywebview). First run **auto-detects** ComfyUI installs (incl. the official Comfy Desktop) so the user confirms candidates instead of typing paths. The desktop app ships as versioned CI assets (`combuddy-X.Y.Z-macos-arm64.dmg`, `combuddy-X.Y.Z-windows-x64.exe`); macOS is ad-hoc signed but not notarized, and Windows is unsigned beta.
 
 ## Commands
 
 ### Backend (Python, repo root)
-- Install (editable + test deps): `pip install -e ".[dev]"`
+- Install (editable + test deps): `pip install -e ".[dev]"`; add the native shell with `pip install -e ".[dev,desktop]"` (pulls `pywebview`).
 - All tests: `pytest -q`
 - Single test: `pytest tests/test_resolver.py::test_resolve_path_match_with_subdir_and_case -v`
-- Run the app: `combuddy` (or `python -m combuddy`) — serves `http://127.0.0.1:8511` and opens a browser tab.
+- Run the app: `combuddy` (browser) · `combuddy demo` (bundled sample data) · `combuddy desktop` (native window; needs the `desktop` extra). All serve `http://127.0.0.1:8511`.
+
+### Desktop packaging (`packaging/`, macOS/Windows)
+- Build the `.app`/`.exe`: `pip install pyinstaller && cd packaging && pyinstaller combuddy.spec --noconfirm` → `packaging/dist/`. The spec **must** `copy_metadata("combuddy")` (else the frozen app can't read its version). Run from `packaging/` (cwd-sensitive). CI builds+signs+uploads on release — you rarely build locally.
+- Regenerate placeholder icons: `python packaging/gen_icons.py` (not `python -m …` — `packaging` shadows the PyPI package; Pillow is a dev-only, lazily-imported tool, not a runtime dep).
 
 ### Frontend (Vue, in `frontend/`)
 - Install: `cd frontend && npm install`
-- All tests: `npm test` (Vitest)
+- All tests: `npm test` (Vitest). If the default pool OOMs locally, use `npx vitest run --pool=forks`.
 - Single test: `npx vitest run src/useLibrary.test.ts`
 - Build: `npm run build` — outputs to `../combuddy/web`, which the backend serves as static files.
 - Dev server (proxies `/api` → `127.0.0.1:8511`): `npm run dev`
@@ -49,13 +55,25 @@ The single place combuddy talks to the network, gated by `online_enrich` (defaul
 ### Trash (the only destructive path)
 `trash.py` "delete" = move the file into `<model_root>/.combuddy-trash/` (recoverable) and drop the DB row. Safety is non-negotiable here: a per-item 0-reference re-check at move time (TOCTOU guard), a **per-item commit** with **undo-on-failure** (if the DB write fails after the file moved, the file is moved back), a unique dest dir per model id (no overwrite), and `scanner._walk` excludes `.combuddy-trash` so trashed files never reappear as models.
 
+### Duplicate detection (live query, no schema)
+`queries.list_duplicate_groups` groups models by `sha256`, and for each member `os.stat`s its path for the inode — a member is *deletable* when it is unreferenced and shares no inode with the kept copy. **Keep** is 3-tier: a referenced copy wins, else the shallowest path, else `first_seen`. `reclaimable` dedups by inode (hardlinks counted once); if `os.stat` fails on any keep-candidate the whole group is skipped (never mis-deletes). `stats.duplicate_waste` + `GET /api/cleanup/duplicates` feed the Dashboard tile and CleanupView's Duplicates tab; deletion reuses the trash path. Pure query layer — zero schema change.
+
+### Demo mode (`combuddy demo`)
+`combuddy/demo/seed.py::seed_demo(conn)` fills a **tempfile** SQLite DB with synthetic data (models across the dir_types, byte-identical sha256 dup groups, Civitai rows, workflows covering hit/ambiguous/missing) and `__main__` builds the app with `demo=True`. The `demo` flag threads `build_app → create_app`: `/api/stats` reports `demo`, `/api/scan` no-ops, `/api/preview` returns a bundled cover (deterministic `int(sha[:8],16) % 8`). **It never touches `~/.combuddy`, never scans, never hits the network.** Non-demo paths are byte-for-byte unchanged (the flag defaults False everywhere) — the discipline that keeps demo from leaking into real runs.
+
+### Desktop app + zero-config detection (`combuddy desktop`)
+Same FastAPI app, third form. `combuddy/desktop.py` binds a socket and hands it straight to `uvicorn.run(sockets=[sock])` (no port race), waits on `/api/stats`, then opens a pywebview window; a JS `Bridge` exposes native folder-pick / reveal-in-Finder / open-external, and a startup thread checks GitHub for updates (the desktop-only network touch). **Import-safety is an invariant**: `desktop.py` must never `import webview` at module top level (lazy only) so it stays importable/testable without the `desktop` extra. `combuddy/detect.py` is the **read-only, candidates-only** zero-config layer (never writes the DB — the user confirms, then the normal `POST /api/roots` writes): it signature-checks well-known ComfyUI locations + parses `extra_model_paths.yaml` / Comfy Desktop's `extra_models_config.yaml` (key-aware; A1111-style non-canonical mappings are counted, not added), with a bounded soft-timeout `model_count`. `GET /api/detect` excludes already-configured roots server-side. **Version single source**: `combuddy/__init__.py.__version__` derives from `importlib.metadata.version("combuddy")` (fallback `0.0.0+dev`) — bump only `pyproject.toml`; the PyInstaller spec must ship the metadata (`copy_metadata`) or the frozen app's version check breaks.
+
 ### Frontend
-Vue 3, **no vue-router and no Pinia**. `App.vue` switches views with a plain `view` ref + `<component :is>`; each view owns a composable (`useDashboard`/`useLibrary`/`useWorkflows`/`useCleanup`) built on `ref`s, each exposing an `error` ref that its view renders. `api.ts` routes every call through `jsonOrThrow` (throws on non-2xx). Vite builds into `combuddy/web/`, served by FastAPI's static mount — so the whole app ships as one `pip install`.
+Vue 3 + **PrimeVue** + Tailwind + **vue-i18n** (zh/en), **no vue-router and no Pinia**. `App.vue` switches views with a plain `view` ref + `<component :is>`; each view owns a composable built on `ref`s exposing an `error` ref the view renders (`useDashboard`/`useLibrary`/`useWorkflows`/`useCleanup`/`useDuplicates`/`useSettings`). Cross-cutting state uses **module-level singletons** (`useNav`, `useTheme`, `useDemo`, `useDesktop`, `useDetect` — a module `export const ref` + a one-time `started` guard, `use*()` returns the shared refs); `useTheme` drives the 5-palette × light/dark PrimeVue theming, `useDetect` powers the first-run detect flow (RootsSetup/DetectPanel), `useDesktop` gates the native-only bits on `window.pywebview`. **Test convention:** logic lives in composables (unit-tested with Vitest, mocking `./api`); `.vue` views stay thin and are **not** unit-tested (no jsdom/@vue/test-utils) — verified on the real machine. `api.ts` routes every call through `jsonOrThrow` (throws on non-2xx). Vite builds into `combuddy/web/`, served by FastAPI's static mount — so the whole app ships as one `pip install`.
 
 ## Conventions
 - stdlib `sqlite3` only (no ORM); connections use `sqlite3.Row` — access columns by name, not position.
-- Local-first core: no network calls in the base scan/match/resolve pipeline. Network is confined to the optional, toggleable Civitai enrichment layer (hash-only queries). SHA256 hashing is now computed locally for identity and enrichment.
-- Match the terse, dependency-light style already in each module; each file has one clear responsibility.
+- Local-first core: no network in the base scan/match/resolve pipeline. The **only** network touches are the optional/toggleable Civitai enrichment (hash-only queries) and the desktop app's startup update-check (version query only). sha256 is computed locally.
+- **Dependency discipline** (dependency-light is the brand): base deps stay `fastapi`/`uvicorn`/`pyyaml`; `pywebview` lives in the `desktop` extra; PyInstaller and Pillow are build-only, never runtime deps (Pillow is lazily imported in `packaging/gen_icons.py` so the module stays importable without it).
+- **Non-target paths stay byte-unchanged**: new run modes (`demo`/`desktop`) and backend params default off/None, so CLI + browser behavior never changes. This "flag defaults false everywhere" discipline is what keeps demo/desktop from leaking into real runs.
+- Match the terse style already in each module; each file has one clear responsibility.
+- Releases: bump `pyproject.toml` (version is single-source there — don't touch `__init__.py`), then publish a GitHub Release with a matching `vX.Y.Z` tag → `release.yml` publishes PyPI and builds versioned desktop assets. `desktop.yml` is for manual desktop-only rebuilds and can upload/replace assets on an existing release. See `RELEASING.md`.
 
 ## Design docs
 Full design history — specs, implementation plans, and UI mockups — lives under `docs/superpowers/` on disk but is **gitignored (local-only, not published)**. It is the authoritative rationale for the decisions above; consult it when a design choice is unclear.

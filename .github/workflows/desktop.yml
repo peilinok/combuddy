@@ -21,10 +21,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
-            asset: combuddy-macos-arm64.dmg
+          - os: macos-15
+            suffix: macos-arm64.dmg
           - os: windows-2022
-            asset: combuddy-windows-x64.exe
+            suffix: windows-x64.exe
     runs-on: ${{ matrix.os }}
     steps:
       - name: Resolve build ref
@@ -57,6 +57,25 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Resolve asset name
+        id: asset
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          if [ -n "$RELEASE_TAG" ]; then
+            VERSION="${RELEASE_TAG#v}"
+          else
+            VERSION="$(python - <<'PY'
+          import tomllib
+
+          with open("pyproject.toml", "rb") as f:
+              print(tomllib.load(f)["project"]["version"])
+          PY
+          )"
+          fi
+          echo "name=combuddy-$VERSION-${{ matrix.suffix }}" >> "$GITHUB_OUTPUT"
+
       - name: Build frontend
         working-directory: frontend
         run: npm ci && npm run build
@@ -77,18 +96,18 @@ jobs:
           # TODO: notarization is a placeholder only; no notarytool/staple runs here.
           # TODO: wire real Developer ID signing and notarization in a later task.
           if [ -n "$MACOS_CERT_P12" ]; then echo "MACOS_CERT_P12 is present; notarization placeholder only."; fi
-          bash packaging/macos_dmg.sh packaging/dist/combuddy.app packaging/dist/combuddy-macos-arm64.dmg
+          bash packaging/macos_dmg.sh packaging/dist/combuddy.app "packaging/dist/${{ steps.asset.outputs.name }}"
 
       - name: Rename Windows exe
         if: runner.os == 'Windows'
         shell: bash
         working-directory: packaging
-        run: mv dist/combuddy.exe dist/combuddy-windows-x64.exe
+        run: mv dist/combuddy.exe "dist/${{ steps.asset.outputs.name }}"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset }}
-          path: packaging/dist/${{ matrix.asset }}
+          name: ${{ steps.asset.outputs.name }}
+          path: packaging/dist/${{ steps.asset.outputs.name }}
           retention-days: 14
 
       - name: Upload release asset
@@ -98,4 +117,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh release upload "${{ inputs.release_tag }}" "dist/${{ matrix.asset }}" --clobber
+        run: gh release upload "${{ inputs.release_tag }}" "dist/${{ steps.asset.outputs.name }}" --clobber
