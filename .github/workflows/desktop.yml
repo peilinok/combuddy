@@ -70,15 +70,14 @@ jobs:
 
       - name: Package macOS dmg (ad-hoc signed)
         if: runner.os == 'macOS'
-        working-directory: packaging
         env:
           MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
         run: |
-          codesign --force --deep -s - dist/combuddy.app
+          codesign --force --deep -s - packaging/dist/combuddy.app
           # TODO: notarization is a placeholder only; no notarytool/staple runs here.
           # TODO: wire real Developer ID signing and notarization in a later task.
           if [ -n "$MACOS_CERT_P12" ]; then echo "MACOS_CERT_P12 is present; notarization placeholder only."; fi
-          hdiutil create -volname combuddy -srcfolder dist/combuddy.app -ov -format UDZO dist/combuddy-macos-arm64.dmg
+          bash packaging/macos_dmg.sh packaging/dist/combuddy.app packaging/dist/combuddy-macos-arm64.dmg
 
       - name: Rename Windows exe
         if: runner.os == 'Windows'

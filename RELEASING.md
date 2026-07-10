@@ -82,6 +82,12 @@ First-open on macOS (unsigned): System Settings → Privacy & Security → **Ope
 (older macOS: right-click the app → **Open**). Windows SmartScreen shows a first-run
 warning → **More info → Run anyway**.
 
+The macOS DMG is staged with `combuddy.app` and an `/Applications` symlink so
+users can drag the app into Applications. Windows uses Edge WebView2 for the
+native shell; when the runtime is missing, the app shows a notice and opens the
+local server in the user's browser instead of falling back to a blank legacy
+MSHTML window.
+
 ### macOS notarization is not implemented yet (TODO)
 
 The current workflow only does ad-hoc signing. `MACOS_CERT_P12` is a placeholder

@@ -14,4 +14,13 @@
 })();
 </script>
 </head>
-<body><div id="app"></div><script type="module" src="/src/main.ts"></script></body></html>
+<body><div id="app"></div>
+<script nomodule>
+document.getElementById("app").innerHTML =
+  '<div style="font-family:system-ui,sans-serif;margin:40px;max-width:680px;line-height:1.5">' +
+  '<h1 style="font-size:20px">Unsupported Windows WebView</h1>' +
+  '<p>This window is using an old WebView engine that cannot run combuddy.</p>' +
+  '<p>Install Microsoft Edge WebView2 Runtime, then reopen combuddy. You can also use combuddy in a modern browser.</p>' +
+  '</div>';
+</script>
+<script type="module" src="/src/main.ts"></script></body></html>

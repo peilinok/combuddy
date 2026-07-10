@@ -13,6 +13,14 @@ import webbrowser
 
 from . import __version__
 
+_WEBVIEW2_MIN_VERSION = (86, 0, 622, 0)
+_WEBVIEW2_CLIENT_KEYS = (
+    "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",  # Microsoft Edge WebView2 Runtime
+    "{2CD8A007-E189-409D-A2C8-9AF4EF3C72AA}",  # Beta
+    "{0D50BFEC-CD6A-4F9A-964C-C7416E3ACB10}",  # Dev
+    "{65C35B14-6C1D-4122-AC46-7148CC9D6497}",  # Canary
+)
+
 
 def _bind_socket() -> "tuple[socket.socket, int]":
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -53,6 +61,52 @@ def _check_update(state: dict) -> None:
         latest = str(data.get("tag_name", "")).lstrip("v")
         if _newer(latest, __version__):
             state["update"] = {"version": latest, "url": data.get("html_url")}
+    except Exception:
+        pass
+
+
+def _version_at_least(version: str, minimum: tuple[int, ...]) -> bool:
+    try:
+        parts = tuple(int(p) for p in str(version).split("."))
+    except ValueError:
+        return False
+    parts += (0,) * max(0, len(minimum) - len(parts))
+    return parts >= minimum
+
+
+def _webview2_registry_paths():
+    for key in _WEBVIEW2_CLIENT_KEYS:
+        yield rf"SOFTWARE\Microsoft\EdgeUpdate\Clients\{key}"
+        yield rf"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{key}"
+
+
+def _windows_has_webview2_runtime(winreg_module=None) -> bool:
+    if winreg_module is None:
+        if os.name != "nt":
+            return False
+        try:
+            import winreg as winreg_module
+        except Exception:
+            return False
+    for hive_name in ("HKEY_CURRENT_USER", "HKEY_LOCAL_MACHINE"):
+        hive = getattr(winreg_module, hive_name)
+        for path in _webview2_registry_paths():
+            try:
+                with winreg_module.OpenKey(hive, path) as key:
+                    version, _ = winreg_module.QueryValueEx(key, "pv")
+                if _version_at_least(str(version), _WEBVIEW2_MIN_VERSION):
+                    return True
+            except Exception:
+                pass
+    return False
+
+
+def _show_windows_message(title: str, message: str) -> None:
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(None, message, title, 0x40)
     except Exception:
         pass
 
@@ -103,10 +157,20 @@ def run_desktop() -> int:
         return 1
     threading.Thread(target=_check_update, args=(state,), daemon=True).start()
     url = f"http://127.0.0.1:{port}"
+    if os.name == "nt" and not _windows_has_webview2_runtime():
+        _show_windows_message(
+            "combuddy",
+            "combuddy needs Microsoft Edge WebView2 Runtime for the native window.\n"
+            "The app will open in your browser instead.",
+        )
+        webbrowser.open(url)
+        t.join()
+        return 0
     try:
         webview.create_window("combuddy", url, js_api=Bridge(),
                               width=1280, height=820, min_size=(900, 600))
-        webview.start()                 # blocks until the window is closed
+        gui = "edgechromium" if os.name == "nt" else None
+        webview.start(gui=gui)           # blocks until the window is closed
     except Exception:
         webbrowser.open(url)            # webview backend unavailable but server is up
         t.join()                        # serve the tab; RETURN if the server thread dies
