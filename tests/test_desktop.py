@@ -1,5 +1,6 @@
 import importlib
 import importlib.metadata as ilm
+import pathlib
 
 
 def test_version_matches_package_metadata():
@@ -67,3 +68,49 @@ def test_pyinstaller_spec_copies_metadata():
     with open("packaging/combuddy.spec", "r", encoding="utf-8") as f:
         spec = f.read()
     assert 'copy_metadata("combuddy")' in spec or "copy_metadata('combuddy')" in spec
+
+
+class _FakeWinreg:
+    HKEY_CURRENT_USER = "HKCU"
+    HKEY_LOCAL_MACHINE = "HKLM"
+
+    def __init__(self, versions):
+        self.versions = versions
+
+    def OpenKey(self, hive, path):
+        if (hive, path) not in self.versions:
+            raise FileNotFoundError(path)
+        return _FakeWinregKey(self.versions[(hive, path)])
+
+    def QueryValueEx(self, key, name):
+        assert name == "pv"
+        return key.version, None
+
+
+class _FakeWinregKey:
+    def __init__(self, version):
+        self.version = version
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
+def test_windows_webview2_runtime_check_detects_supported_version():
+    path = next(desktop._webview2_registry_paths())
+    fake = _FakeWinreg({("HKCU", path): "120.0.2210.144"})
+    assert desktop._windows_has_webview2_runtime(fake) is True
+
+
+def test_windows_webview2_runtime_check_rejects_missing_or_old_version():
+    path = next(desktop._webview2_registry_paths())
+    assert desktop._windows_has_webview2_runtime(_FakeWinreg({})) is False
+    assert desktop._windows_has_webview2_runtime(_FakeWinreg({("HKLM", path): "85.0.1.0"})) is False
+
+
+def test_frontend_has_nomodule_fallback_for_legacy_windows_webview():
+    html = pathlib.Path("frontend/index.html").read_text(encoding="utf-8")
+    assert "nomodule" in html
+    assert "WebView2" in html

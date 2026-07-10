@@ -64,6 +64,10 @@ The app is not yet code-signed, so the OS shows a one-time warning on first open
 - **macOS:** the first time, open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** (older macOS: right-click the app in Finder → **Open** → confirm).
 - **Windows:** SmartScreen may say "Windows protected your PC" → **More info → Run anyway**.
 
+Windows also needs Microsoft Edge WebView2 Runtime for the native window. If it
+is missing, combuddy shows a notice and opens the same local app in your browser
+instead of showing a blank window.
+
 The desktop app checks GitHub once at startup for a newer release. That request sends only a version query — **no model data, paths, or usage** — though, like any web request, GitHub sees your IP and user agent. The CLI and browser modes never make this check.
 
 ## How it works
