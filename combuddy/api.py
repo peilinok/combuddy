@@ -1,8 +1,14 @@
-import os, re, threading
+import os, re, threading, mimetypes
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from . import db as dbm, config, stats, scan_service, queries, trash, detect
+
+# Windows 常把注册表 .js 的 Content Type 设成 text/plain,StaticFiles 据此对打包好的
+# 前端 JS 返回 text/plain,而浏览器/WebView2 以严格 MIME 拒绝执行 <script type="module">,
+# 导致 Vue 不挂载、整页白屏。强制把 .js/.mjs 修正为 JS MIME,覆盖系统注册表的错误值。
+mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("text/javascript", ".mjs")
 
 _DEMO_PREVIEWS_DIR = os.path.join(os.path.dirname(__file__), "demo", "previews")
 
