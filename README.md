@@ -66,7 +66,7 @@ verify the publisher on first open. Download it only from the
 [Releases](https://github.com/peilinok/combuddy/releases/latest) page, then use
 the OS-provided one-time override:
 
-- **macOS:** after the first blocked launch, open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**. On older macOS versions, right-click `combuddy.app` in Finder → **Open** → confirm.
+- **macOS:** after the first blocked launch, open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**. On older macOS versions, right-click `combuddy.app` in Finder → **Open** → confirm. If macOS still blocks it, run `xattr -c commbuddy.app` from the folder containing the app.
 - **Windows:** SmartScreen may say "Windows protected your PC". Click **More info** → **Run anyway**.
 
 Windows also needs Microsoft Edge WebView2 Runtime for the native window. If it
