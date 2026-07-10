@@ -168,10 +168,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
-            asset: combuddy-macos-arm64.dmg
+          - os: macos-15
+            suffix: macos-arm64.dmg
           - os: windows-2022
-            asset: combuddy-windows-x64.exe
+            suffix: windows-x64.exe
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -192,6 +192,11 @@ jobs:
         working-directory: frontend
         run: npm ci && npm run build
 
+      - name: Resolve asset name
+        id: asset
+        shell: bash
+        run: echo 'name=combuddy-${{ needs.prepare.outputs.version }}-${{ matrix.suffix }}' >> "$GITHUB_OUTPUT"
+
       - name: Install
         run: pip install ".[desktop]" pyinstaller
 
@@ -208,20 +213,20 @@ jobs:
           # TODO: notarization is a placeholder only; no notarytool/staple runs here.
           # TODO: wire real Developer ID signing and notarization in a later task.
           if [ -n "$MACOS_CERT_P12" ]; then echo "MACOS_CERT_P12 is present; notarization placeholder only."; fi
-          bash packaging/macos_dmg.sh packaging/dist/combuddy.app packaging/dist/combuddy-macos-arm64.dmg
+          bash packaging/macos_dmg.sh packaging/dist/combuddy.app "packaging/dist/${{ steps.asset.outputs.name }}"
 
       - name: Rename Windows exe
         if: runner.os == 'Windows'
         shell: bash
         working-directory: packaging
-        run: mv dist/combuddy.exe dist/combuddy-windows-x64.exe
+        run: mv dist/combuddy.exe "dist/${{ steps.asset.outputs.name }}"
 
       - name: Upload asset
         shell: bash
         working-directory: packaging
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ needs.prepare.outputs.tag }}" "dist/${{ matrix.asset }}" --clobber
+        run: gh release upload "${{ needs.prepare.outputs.tag }}" "dist/${{ steps.asset.outputs.name }}" --clobber
 
   finalize:
     needs: [prepare, pypi-publish, desktop]
