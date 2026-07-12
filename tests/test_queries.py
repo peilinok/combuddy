@@ -75,3 +75,13 @@ def test_detail_brings_civitai(tmp_path):
         VALUES(1,'x',1,'R','[\"t\"]','http://c/1',1)"""); conn.commit()
     d = queries.get_model_detail(conn, 1)
     assert d["civitai_name"] == "R" and d["civitai_url"] == "http://c/1"
+
+def test_list_workflows_ambiguous_not_missing(tmp_path):
+    conn = db.connect(str(tmp_path/"c.sqlite")); db.init_schema(conn); _seed(conn)
+    conn.execute("""INSERT INTO edges(workflow_id,ref_string,ref_key,node_type,model_id,match_kind)
+        VALUES(1,'dup.safetensors','dup.safetensors','CheckpointLoaderSimple',NULL,'ambiguous')""")
+    conn.commit()
+    w = queries.list_workflows(conn)[0]
+    assert w["resolved"] == 1
+    assert w["missing"] == 1
+    assert w["ambiguous"] == 1

@@ -1,5 +1,6 @@
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { fetchModels, fetchModel, getSettings } from "./api";
+import { scanning, scanRevision } from "./useScanStatus";
 
 export function useLibrary() {
   const models = ref<any[]>([]);
@@ -7,22 +8,46 @@ export function useLibrary() {
   const search = ref(""); const flag = ref("");
   const layout = ref<"grid" | "list">("grid");
   const typeFilter = ref("");
+  const pageFirst = ref(0);
   const collapsed = ref(false);
   const nsfwThreshold = ref(1);
   const revealed = ref<Set<number>>(new Set());
   const lightbox = ref<any | null>(null);
   const error = ref<string | null>(null);
+  const loading = ref(false);
+  let seq = 0;
+  let detailSeq = 0;
+  let settingsPromise: Promise<void> | null = null;
+  let debounceTimer: number | undefined;
 
   async function load() {
+    const my = ++seq;
+    loading.value = true;
+    if (!settingsPromise) {
+      settingsPromise = getSettings()
+        .then((s) => { nsfwThreshold.value = s.nsfw_blur_threshold ?? 1; })
+        .catch((e) => { settingsPromise = null; throw e; });
+    }
     try {
-      const [m, s] = await Promise.all([
-        fetchModels({ search: search.value, flag: flag.value }), getSettings()]);
-      models.value = m.models; nsfwThreshold.value = s.nsfw_blur_threshold ?? 1; error.value = null;
-    } catch (e) { error.value = String(e); }
+      const [m] = await Promise.all([
+        fetchModels({ search: search.value, flag: flag.value }), settingsPromise]);
+      if (my !== seq) return;
+      models.value = m.models; error.value = null;
+    } catch (e) { if (my === seq) error.value = String(e); }
+    finally { if (my === seq) loading.value = false; }
+  }
+  function searchInput() {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = window.setTimeout(load, 300);
   }
   async function openDetail(id: number) {
+    const my = ++detailSeq;
     if (selected.value?.id === id) { selected.value = null; return; }
-    try { selected.value = await fetchModel(id); } catch (e) { error.value = String(e); }
+    try {
+      const detail = await fetchModel(id);
+      if (my !== detailSeq) return;
+      selected.value = detail; error.value = null;
+    } catch (e) { if (my === detailSeq) error.value = String(e); }
   }
   const shouldBlur = (level: number | null) => (level ?? 0) > nsfwThreshold.value;
   const reveal = (id: number) => { revealed.value = new Set(revealed.value).add(id); };
@@ -34,7 +59,11 @@ export function useLibrary() {
     return Object.entries(c).sort((a, b) => b[1] - a[1]).map(([dir_type, count]) => ({ dir_type, count }));
   });
   const visibleModels = computed(() => typeFilter.value ? models.value.filter((m) => m.dir_type === typeFilter.value) : models.value);
+  watch([search, flag, typeFilter], () => { pageFirst.value = 0; });
+  watch([scanning, scanRevision], ([now, revision], [was, previousRevision]) => {
+    if ((was && !now) || revision !== previousRevision) load();
+  });
 
-  return { models, selected, search, flag, layout, revealed, lightbox, error, load, openDetail,
-    shouldBlur, reveal, openLightbox, closeLightbox, typeFilter, collapsed, typeCounts, visibleModels };
+  return { models, selected, search, flag, layout, revealed, lightbox, error, loading, load, searchInput, openDetail,
+    shouldBlur, reveal, openLightbox, closeLightbox, typeFilter, pageFirst, collapsed, typeCounts, visibleModels };
 }

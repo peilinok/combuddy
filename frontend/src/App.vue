@@ -6,6 +6,7 @@ import { useTheme } from "./useTheme";
 import { view, type View } from "./useNav";
 import { demo, useDemo } from "./useDemo";
 import { update, useDesktop } from "./useDesktop";
+import { useScanStatus } from "./useScanStatus";
 import DashboardView from "./components/DashboardView.vue";
 import LibraryView from "./components/LibraryView.vue";
 import WorkflowView from "./components/WorkflowView.vue";
@@ -16,6 +17,7 @@ import RootsSetup from "./components/RootsSetup.vue";
 useTheme(); // 接管换肤(首屏脚本已上好初始主题)
 useDemo(); // 一次性拉取 demo 标志,供本组件横幅 + 扫描按钮共享
 useDesktop(); // 一次性接入桌面壳(isDesktop/自动更新提示),供本组件更新横幅使用
+const { scanning: scanActive } = useScanStatus();
 const { t } = useI18n();
 const { openExternal } = useDesktop();
 function openExternalOrNav(u: string) { openExternal(u).then((ok) => { if (!ok) window.open(u, "_blank"); }); }
@@ -38,6 +40,11 @@ onMounted(async () => { const r = await getRoots(); configured.value = (r.roots?
       <div class="font-semibold px-2">combuddy</div>
       <div class="text-[10px] text-color-secondary px-2 mb-4">{{ t("common.subtitle") }}</div>
       <Menu :model="items" class="w-full border-0 bg-transparent" />
+      <button v-if="scanActive" @click="view = 'dashboard'"
+        class="mt-2 w-full flex items-center gap-2 px-3 py-2 text-xs text-primary rounded-lg bg-primary/10">
+        <i class="pi pi-spin pi-spinner"></i>
+        <span>{{ t("nav.scanBadge") }}</span>
+      </button>
     </aside>
     <main class="flex-1 p-6 overflow-auto">
       <div v-if="update" class="mb-4 px-3 py-2 rounded-lg bg-primary/20 text-primary text-xs font-medium flex justify-between">

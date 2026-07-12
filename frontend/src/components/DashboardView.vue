@@ -1,15 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from "vue";
+import { computed, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useDashboard } from "../useDashboard";
 import { humanSize } from "../format";
 import { view, cleanupTab } from "../useNav";
 import { demo } from "../useDemo";
 const { t } = useI18n();
-const { stats, scanning, error, startScan, cancelHash,
-  refresh, startPolling, stopPolling } = useDashboard();
-onMounted(async () => { await refresh(); startPolling(); });
-onUnmounted(stopPolling);
+const { stats, scanning, error, startScan, cancelHash, refresh } = useDashboard();
+onMounted(refresh);
 
 const byTypeRows = computed(() => {
   const rows = (stats.value.by_type ?? []).map((t: any) => ({ dir_type: t.dir_type, size: t.size }));
@@ -34,10 +32,13 @@ const phaseTotal = computed(() => {
 });
 
 const tiles = computed(() => [
-  { label: t("dashboard.models"), icon: "pi pi-images", value: stats.value.model_count, sub: humanSize(stats.value.total_size) },
-  { label: t("dashboard.workflows"), icon: "pi pi-sitemap", value: stats.value.workflow_count },
+  { label: t("dashboard.models"), icon: "pi pi-images", value: stats.value.model_count, sub: humanSize(stats.value.total_size),
+    click: () => { view.value = "library"; } },
+  { label: t("dashboard.workflows"), icon: "pi pi-sitemap", value: stats.value.workflow_count,
+    click: () => { view.value = "workflows"; } },
   { label: t("dashboard.totalSize"), icon: "pi pi-database", value: humanSize(stats.value.total_size) },
-  { label: t("dashboard.unreferenced"), icon: "pi pi-exclamation-triangle", value: stats.value.unreferenced_count, sub: t("dashboard.cleanable"), warn: true },
+  { label: t("dashboard.unreferenced"), icon: "pi pi-exclamation-triangle", value: stats.value.unreferenced_count, sub: t("dashboard.cleanable"), warn: true,
+    click: () => { cleanupTab.value = "unreferenced"; view.value = "cleanup"; } },
   { label: t("dashboard.dupWaste"),
     icon: "pi pi-copy",
     value: stats.value.scanning ? t("dashboard.dupCalc")
@@ -63,6 +64,9 @@ const knobs = computed(() => [
         {{ scanning ? (stats.scan?.phase === 'hashing' ? t("dashboard.hashing") : stats.scan?.phase === 'enriching' ? t("dashboard.enriching") : t("dashboard.scanning")) : t("dashboard.scan") }}
       </button>
     </div>
+    <div v-if="stats.scan?.errors" class="text-orange-400 text-xs mb-3">
+      {{ t("dashboard.scanErrors", { n: stats.scan.errors }) }}
+    </div>
     <div v-if="scanning" class="mb-4">
       <div class="text-sm text-color-secondary mb-1">{{ phaseLabel }}</div>
       <ProgressBar v-if="phaseTotal" :value="Math.round(100 * phaseDone / phaseTotal)" />
@@ -73,7 +77,8 @@ const knobs = computed(() => [
       <Card v-for="s in tiles" :key="s.label"
         :class="s.click ? 'cursor-pointer hover:bg-surface-hover transition-colors' : ''"
         @click="s.click && s.click()"><template #content>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 relative">
+          <i v-if="s.click" class="pi pi-arrow-up-right absolute -top-1 -right-1 text-[10px] text-color-secondary"></i>
           <i :class="s.icon" class="text-2xl text-primary"></i>
           <div><div class="text-2xl font-bold" :class="s.warn ? 'text-orange-400' : 'text-color'">{{ s.value }}</div>
             <div class="text-xs text-color-secondary">{{ s.label }}<span v-if="s.sub"> · {{ s.sub }}</span></div></div>

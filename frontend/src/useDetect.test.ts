@@ -5,7 +5,9 @@ vi.mock("./api", () => ({ fetchDetect, setRoots, postScan }));
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 beforeEach(() => { vi.resetModules(); fetchDetect.mockReset(); setRoots.mockReset(); postScan.mockReset();
-  setRoots.mockResolvedValue({}); postScan.mockResolvedValue({}); });
+  setRoots.mockImplementation((roots: any[]) => Promise.resolve({
+    ok: true, results: roots.map((r) => ({ path: r.path, ok: true, reason: null })) }));
+  postScan.mockResolvedValue({}); });
 
 describe("useDetect", () => {
   it("load fills candidates + skipped, all selected by default", async () => {
@@ -61,5 +63,34 @@ describe("useDetect", () => {
     await d.confirm();
     expect(setRoots).not.toHaveBeenCalled();
     expect(postScan).not.toHaveBeenCalled();
+  });
+
+  it("confirm keeps setup open when every root fails validation", async () => {
+    fetchDetect.mockResolvedValue({ candidates: [
+      { kind: "model", path: "/gone", label: "Gone", model_count: 1, count_capped: false }],
+      skipped_config_mappings: 0 });
+    setRoots.mockResolvedValueOnce({ ok: true, results: [
+      { path: "/gone", ok: false, reason: "not_a_directory" }] });
+    const { useDetect } = await import("./useDetect");
+    const d = useDetect(); await d.load();
+
+    expect(await d.confirm()).toBe(false);
+    expect(d.error.value).toBe("not_a_directory");
+    expect(postScan).not.toHaveBeenCalled();
+  });
+
+  it("confirm scans when at least one root passes validation", async () => {
+    fetchDetect.mockResolvedValue({ candidates: [
+      { kind: "model", path: "/ok", label: "OK", model_count: 1, count_capped: false },
+      { kind: "workflow", path: "/gone", label: "Gone", model_count: null, count_capped: false }],
+      skipped_config_mappings: 0 });
+    setRoots.mockResolvedValueOnce({ ok: true, results: [
+      { path: "/ok", ok: true, reason: null },
+      { path: "/gone", ok: false, reason: "not_a_directory" }] });
+    const { useDetect } = await import("./useDetect");
+    const d = useDetect(); await d.load();
+
+    expect(await d.confirm()).toBe(true);
+    expect(postScan).toHaveBeenCalledTimes(1);
   });
 });

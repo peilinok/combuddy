@@ -1,5 +1,6 @@
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { fetchUnreferenced, postTrash } from "./api";
+import { scanning, scanRevision } from "./useScanStatus";
 
 export function useCleanup() {
   const items = ref<any[]>([]);
@@ -20,5 +21,8 @@ export function useCleanup() {
     try { await postTrash([...selectedIds.value]); await load(); }
     catch (e) { error.value = String(e); }
   }
+  watch([scanning, scanRevision], ([now, revision], [was, previousRevision]) => {
+    if ((was && !now) || revision !== previousRevision) load();
+  });
   return { items, selectedIds, selectedBytes, toggle, load, trashSelected, error };
 }

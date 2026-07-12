@@ -7,7 +7,7 @@ def _reset_status():
     scan_service.STATUS.update(running=False, phase="idle", models_found=0,
                                 bases_done=0, workflows_done=0, errors=0,
                                 hash_done=0, hash_total=0,
-                                enrich_done=0, enrich_total=0, cancel=False)
+                                enrich_done=0, enrich_total=0, cancel=False, revision=0)
 
 def _wait_for_scan_to_finish(timeout=5.0, interval=0.01):
     deadline = time.time() + timeout

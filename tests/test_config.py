@@ -11,9 +11,10 @@ def test_detect_candidates_only_stats_given_paths(tmp_path):
 
 def test_set_and_get_roots(tmp_path):
     conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    m = tmp_path / "models"; m.mkdir(); w = tmp_path / "wf"; w.mkdir()
     config.set_roots(conn, [
-        {"kind": "model", "path": "/a/models", "label": "share", "source": "manual"},
-        {"kind": "workflow", "path": "/a/wf", "label": "wf", "source": "manual"},
+        {"kind": "model", "path": str(m), "label": "share", "source": "manual"},
+        {"kind": "workflow", "path": str(w), "label": "wf", "source": "manual"},
     ])
     assert len(config.get_roots(conn, "model")) == 1
     assert len(config.get_roots(conn)) == 2

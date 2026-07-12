@@ -4,6 +4,12 @@ from combuddy import db, config, scan_service, stats
 def _st(p, header):
     blob = json.dumps(header).encode(); p.write_bytes(struct.pack("<Q", len(blob)) + blob)
 
+def test_run_scan_increments_revision(tmp_path):
+    conn = db.connect(str(tmp_path/"c.sqlite")); db.init_schema(conn)
+    assert scan_service.STATUS["revision"] == 0
+    scan_service.run_scan(conn)
+    assert scan_service.STATUS["revision"] == 1
+
 def test_run_scan_populates_everything(tmp_path):
     conn = db.connect(str(tmp_path/"c.sqlite")); db.init_schema(conn)
     mroot = tmp_path / "models"; (mroot/"checkpoints"/"SD1.5").mkdir(parents=True)
@@ -27,8 +33,22 @@ def test_single_flight(tmp_path, monkeypatch):
     scan_service.STATUS["running"] = True
     try:
         assert scan_service.run_scan(conn) == {"skipped": "already running"}
+        assert scan_service.STATUS["revision"] == 0
     finally:
         scan_service.STATUS["running"] = False
+
+def test_run_scan_holds_mutation_guard(tmp_path, monkeypatch):
+    conn = db.connect(str(tmp_path/"c.sqlite")); db.init_schema(conn)
+    root = tmp_path / "models"; root.mkdir()
+    config.set_roots(conn, [{"kind": "model", "path": str(root)}])
+    held = []
+    def inspect_guard(*_args):
+        with scan_service.mutation_guard(blocking=False) as acquired:
+            held.append(not acquired)
+        return {}
+    monkeypatch.setattr(scan_service.scanner, "scan_model_root", inspect_guard)
+    scan_service.run_scan(conn)
+    assert held == [True]
 
 def test_run_scan_skips_bad_workflow_root_and_continues(tmp_path):
     conn = db.connect(str(tmp_path/"c.sqlite")); db.init_schema(conn)
@@ -38,11 +58,12 @@ def test_run_scan_skips_bad_workflow_root_and_continues(tmp_path):
     good_wroot = tmp_path / "wf"; good_wroot.mkdir()
     (good_wroot/"a.json").write_text(json.dumps({"nodes": [
         {"type": "CheckpointLoaderSimple", "widgets_values": ["SD1.5/foo.safetensors"]}]}))
-    bad_wroot = tmp_path / "gone"          # 不存在于磁盘上
+    bad_wroot = tmp_path / "gone"; bad_wroot.mkdir()
     config.set_roots(conn, [
         {"kind":"model","path":str(mroot),"source":"manual"},
         {"kind":"workflow","path":str(good_wroot),"source":"manual"},
         {"kind":"workflow","path":str(bad_wroot),"source":"manual"}])
+    bad_wroot.rmdir()                       # 配置后离线,扫描仍应跳过并继续
     scan_service.run_scan(conn)
     assert scan_service.STATUS["running"] is False
     s = stats.get_stats(conn)

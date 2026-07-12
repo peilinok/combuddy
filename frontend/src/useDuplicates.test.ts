@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const fetchDuplicates = vi.fn();
 const postTrash = vi.fn();
-vi.mock("./api", () => ({ fetchDuplicates: (...a: any) => fetchDuplicates(...a),
+vi.mock("./api", () => ({ fetchStats: vi.fn().mockResolvedValue({ scanning: false, scan: { phase: "idle" } }),
+                          fetchDuplicates: (...a: any) => fetchDuplicates(...a),
                           postTrash: (...a: any) => postTrash(...a) }));
 import { useDuplicates, reclaimableOf } from "./useDuplicates";
 

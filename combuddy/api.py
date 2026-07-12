@@ -32,10 +32,11 @@ def create_app(db_path: str, static_dir: str | None = None, demo: bool = False,
 
     @app.get("/api/stats")
     def get_stats():
+        status = dict(scan_service.STATUS)
         c = conn()
-        s = stats.get_stats(c)
-        s["scanning"] = scan_service.STATUS["running"]
-        s["scan"] = dict(scan_service.STATUS)
+        s = stats.get_stats(c, skip_duplicates=status["running"])
+        s["scanning"] = status["running"]
+        s["scan"] = status
         s["demo"] = demo
         s["desktop"] = desktop_state is not None
         if desktop_state and desktop_state.get("update"):
@@ -52,7 +53,15 @@ def create_app(db_path: str, static_dir: str | None = None, demo: bool = False,
 
     @app.post("/api/roots")
     def post_roots(body: dict):
-        c = conn(); config.set_roots(c, body.get("roots", [])); c.close()
+        c = conn(); results = config.set_roots(c, body.get("roots", [])); c.close()
+        return {"ok": True, "results": results}
+
+    @app.delete("/api/roots/{root_id}")
+    def delete_root(root_id: int):
+        with scan_service.mutation_guard():
+            c = conn(); ok = config.remove_root(c, root_id); c.close()
+        if not ok:
+            return JSONResponse({"error": "not found"}, status_code=404)
         return {"ok": True}
 
     @app.get("/api/detect")
@@ -123,7 +132,8 @@ def create_app(db_path: str, static_dir: str | None = None, demo: bool = False,
 
     @app.post("/api/cleanup/trash")
     def api_trash(body: dict):
-        c = conn(); res = trash.move_to_trash(c, body.get("model_ids", [])); c.close()
+        with scan_service.mutation_guard():
+            c = conn(); res = trash.move_to_trash(c, body.get("model_ids", [])); c.close()
         return res
 
     @app.get("/api/cleanup/trash")

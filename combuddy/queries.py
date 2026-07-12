@@ -44,7 +44,9 @@ def list_workflows(conn):
     return [dict(r) for r in conn.execute(
         """SELECT w.id, w.filename, w.ref_count, w.parse_error,
              (SELECT COUNT(*) FROM edges e WHERE e.workflow_id=w.id AND e.model_id IS NOT NULL) resolved,
-             (SELECT COUNT(*) FROM edges e WHERE e.workflow_id=w.id AND e.model_id IS NULL) missing
+             (SELECT COUNT(*) FROM edges e WHERE e.workflow_id=w.id AND e.model_id IS NULL
+                AND (e.match_kind IS NULL OR e.match_kind != 'ambiguous')) missing,
+             (SELECT COUNT(*) FROM edges e WHERE e.workflow_id=w.id AND e.match_kind='ambiguous') ambiguous
            FROM workflows w ORDER BY w.filename""")]
 
 def get_workflow_resolution(conn, workflow_id):
