@@ -7,8 +7,8 @@ import { humanSize } from "../format";
 import { displayLabel, isIdentified } from "../labels";
 import ModelCard from "./ModelCard.vue";
 const { t } = useI18n();
-const { models, selected, search, flag, layout, revealed, lightbox, load, openDetail, error,
-  shouldBlur, reveal, openLightbox, closeLightbox, typeFilter, collapsed, typeCounts, visibleModels } = useLibrary();
+const { models, selected, search, flag, layout, revealed, lightbox, loading, load, searchInput, openDetail, error,
+  shouldBlur, reveal, openLightbox, closeLightbox, typeFilter, pageFirst, collapsed, typeCounts, visibleModels } = useLibrary();
 const { isDesktop, reveal: revealInFinder, openExternal } = useDesktop();
 function onKey(e: KeyboardEvent) { if (e.key === "Escape") closeLightbox(); }
 onMounted(() => { load(); window.addEventListener("keydown", onKey); });
@@ -20,7 +20,7 @@ function setFlag(f: string) { flag.value = flag.value === f ? "" : f; load(); }
     <h1 class="text-xl font-semibold mb-4">{{ t("library.title") }}</h1>
     <div v-if="error" class="text-orange-400 text-sm mb-3">{{ error }}</div>
     <div class="flex gap-2 mb-4 items-center">
-      <input v-model="search" @input="load" :placeholder="t('library.search')"
+      <input v-model="search" @input="searchInput" :placeholder="t('library.search')"
         class="px-3 py-2 rounded bg-surface-card text-sm w-64" />
       <button @click="setFlag('unknown')" :class="['px-3 rounded text-xs', flag==='unknown'?'bg-surface-hover text-primary':'bg-surface-card text-color-secondary']">{{ t("library.unknown") }}</button>
       <button @click="setFlag('unreferenced')" :class="['px-3 rounded text-xs', flag==='unreferenced'?'bg-surface-hover text-primary':'bg-surface-card text-color-secondary']">{{ t("library.unreferenced") }}</button>
@@ -48,7 +48,7 @@ function setFlag(f: string) { flag.value = flag.value === f ? "" : f; load(); }
         </div>
       </aside>
       <div class="flex-1 min-w-0">
-        <DataView :value="visibleModels" :layout="layout" paginator :rows="60" :alwaysShowPaginator="false">
+        <DataView v-model:first="pageFirst" :value="visibleModels" :layout="layout" paginator :rows="60" :alwaysShowPaginator="false">
           <template #grid="{ items }">
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6 gap-3">
               <ModelCard v-for="m in items" :key="m.id" :m="m"
@@ -81,7 +81,9 @@ function setFlag(f: string) { flag.value = flag.value === f ? "" : f; load(); }
             </table>
           </template>
           <template #empty>
-            <div class="text-color-secondary text-sm py-6 text-center">{{ t("library.empty") }}</div>
+            <div class="text-color-secondary text-sm py-6 text-center">
+              {{ loading ? t("library.loading") : (search || flag || typeFilter) ? t("library.empty") : t("library.noModels") }}
+            </div>
           </template>
         </DataView>
         <div v-if="selected" class="bg-surface-card rounded p-3 text-xs mt-4">

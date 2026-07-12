@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { nextTick } from "vue";
 vi.mock("./api", () => ({
   fetchModels: vi.fn().mockResolvedValue({ models: [
     { id: 1, filename: "a.safetensors", label: "sdxl", ref_count: 2,
@@ -63,5 +64,66 @@ describe("useLibrary", () => {
     lib.typeFilter.value = "loras";
     expect(lib.visibleModels.value.length).toBe(1);
     expect(lib.visibleModels.value[0].id).toBe(3);
+  });
+  it("stale responses are dropped (race guard)", async () => {
+    const api = await import("./api");
+    let resolveFirst!: (v: any) => void;
+    (api.fetchModels as any)
+      .mockImplementationOnce(() => new Promise((res) => { resolveFirst = res; }))
+      .mockImplementationOnce(() => Promise.resolve({ models: [{ id: 2, filename: "new.safetensors" }] }));
+    const lib = useLibrary();
+    const p1 = lib.load(); const p2 = lib.load();
+    await p2;
+    resolveFirst({ models: [{ id: 1, filename: "old.safetensors" }] });
+    await p1;
+    expect(lib.models.value[0].filename).toBe("new.safetensors");
+  });
+  it("settings fetched once across loads", async () => {
+    const api = await import("./api");
+    (api.getSettings as any).mockClear();
+    const lib = useLibrary();
+    await lib.load(); await lib.load();
+    expect(api.getSettings).toHaveBeenCalledTimes(1);
+  });
+  it("waits for settings before publishing models", async () => {
+    const api = await import("./api");
+    let resolveSettings!: (v: any) => void;
+    (api.getSettings as any).mockImplementationOnce(() => new Promise((res) => { resolveSettings = res; }));
+    const lib = useLibrary();
+    const pending = lib.load();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(lib.models.value).toEqual([]);
+    resolveSettings({ nsfw_blur_threshold: 0 });
+    await pending;
+    expect(lib.models.value[0].filename).toBe("a.safetensors");
+    expect(lib.shouldBlur(1)).toBe(true);
+  });
+  it("retries settings after failure without publishing stale-threshold models", async () => {
+    const api = await import("./api");
+    (api.getSettings as any).mockClear();
+    (api.getSettings as any)
+      .mockRejectedValueOnce(new Error("settings failed"))
+      .mockResolvedValueOnce({ nsfw_blur_threshold: 0 });
+    const lib = useLibrary();
+    await lib.load();
+    expect(lib.models.value).toEqual([]);
+    expect(lib.error.value).toContain("settings failed");
+    await lib.load();
+    expect(lib.models.value[0].filename).toBe("a.safetensors");
+    expect(api.getSettings).toHaveBeenCalledTimes(2);
+  });
+  it("resets pagination when library filters change", async () => {
+    const lib = useLibrary();
+    const changes = [
+      () => { lib.search.value = "new"; },
+      () => { lib.flag.value = "unknown"; },
+      () => { lib.typeFilter.value = "loras"; },
+    ];
+    for (const change of changes) {
+      lib.pageFirst.value = 60;
+      change();
+      await nextTick();
+      expect(lib.pageFirst.value).toBe(0);
+    }
   });
 });
