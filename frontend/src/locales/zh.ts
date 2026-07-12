@@ -2,7 +2,7 @@ export default {
   nav: { dashboard: "Dashboard", library: "模型库", workflows: "Workflow", cleanup: "清理中心", settings: "设置" },
   common: { subtitle: "模型与依赖管家" },
   settings: {
-    title: "设置", appearance: "外观", language: "语言", langZh: "中文", langEn: "English",
+    title: "设置", saving: "保存中…", saved: "已保存 ✓", appearance: "外观", language: "语言", langZh: "中文", langEn: "English",
     scanHash: "扫描 & 哈希", autoHash: "扫描后自动计算 sha256", hashWorkers: "哈希并发",
     maxMbps: "限速 MB/s(0=不限)",
     civitaiEnrich: "Civitai 富化", onlineEnrich: "扫描后自动联网识别(仅发送哈希)",

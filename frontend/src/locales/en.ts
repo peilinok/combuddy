@@ -2,7 +2,7 @@ export default {
   nav: { dashboard: "Dashboard", library: "Model Library", workflows: "Workflow", cleanup: "Cleanup", settings: "Settings" },
   common: { subtitle: "Models & dependency manager" },
   settings: {
-    title: "Settings", appearance: "Appearance", language: "Language", langZh: "中文", langEn: "English",
+    title: "Settings", saving: "Saving…", saved: "Saved ✓", appearance: "Appearance", language: "Language", langZh: "中文", langEn: "English",
     scanHash: "Scan & Hash", autoHash: "Compute sha256 automatically after scan", hashWorkers: "Hash workers",
     maxMbps: "Rate limit MB/s (0 = unlimited)",
     civitaiEnrich: "Civitai Enrichment", onlineEnrich: "Auto-identify online after scan (hash only)",

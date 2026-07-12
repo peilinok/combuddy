@@ -8,7 +8,7 @@ import { setLocale } from "../i18n";
 import ThemePicker from "./ThemePicker.vue";
 import DetectPanel from "./DetectPanel.vue";
 const { t, locale } = useI18n();
-const { settings, roots, error, load, save, addRoot } = useSettings();
+const { settings, roots, error, saveState, load, save, addRoot } = useSettings();
 const { load: loadDetect } = useDetect();
 const { isDesktop, pickFolder } = useDesktop();
 const newKind = ref("model");
@@ -18,7 +18,9 @@ onMounted(load);
 </script>
 <template>
   <div class="max-w-2xl">
-    <h1 class="text-xl font-semibold mb-4">{{ t("settings.title") }}</h1>
+    <h1 class="text-xl font-semibold mb-4">{{ t("settings.title") }}
+      <span v-if="saveState !== 'idle'" class="text-xs font-normal text-color-secondary ml-2">
+        {{ saveState === 'saving' ? t("settings.saving") : t("settings.saved") }}</span></h1>
     <div v-if="error" class="text-orange-400 text-sm mb-3">{{ error }}</div>
     <Panel :header="t('settings.appearance')" class="mb-4">
       <ThemePicker />
