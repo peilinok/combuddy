@@ -53,7 +53,14 @@ def create_app(db_path: str, static_dir: str | None = None, demo: bool = False,
 
     @app.post("/api/roots")
     def post_roots(body: dict):
-        c = conn(); config.set_roots(c, body.get("roots", [])); c.close()
+        c = conn(); results = config.set_roots(c, body.get("roots", [])); c.close()
+        return {"ok": True, "results": results}
+
+    @app.delete("/api/roots/{root_id}")
+    def delete_root(root_id: int):
+        c = conn(); ok = config.remove_root(c, root_id); c.close()
+        if not ok:
+            return JSONResponse({"error": "not found"}, status_code=404)
         return {"ok": True}
 
     @app.get("/api/detect")

@@ -1,5 +1,5 @@
 import { ref } from "vue";
-import { getSettings, setSettings, getRoots, setRoots } from "./api";
+import { getSettings, setSettings, getRoots, setRoots, deleteRoot } from "./api";
 
 let writeTail = Promise.resolve();
 function enqueueSettingsWrite(patch: Record<string, unknown>) {
@@ -13,6 +13,7 @@ export function useSettings() {
   const roots = ref<any[]>([]);
   const error = ref<string | null>(null);
   const saveState = ref<"idle" | "saving" | "saved">("idle");
+  const addResult = ref<{ ok: boolean; reason: string | null } | null>(null);
   let pending: Record<string, unknown> = {};
   let saveTimer: number | undefined;
   let savedTimer: number | undefined;
@@ -61,8 +62,16 @@ export function useSettings() {
     }, 400);
   }
   async function addRoot(kind: string, path: string) {
-    try { await setRoots([{ kind, path, source: "manual" }]); const r = await getRoots(); roots.value = r.roots ?? []; }
+    try {
+      const r = await setRoots([{ kind, path, source: "manual" }]);
+      addResult.value = r.results?.[0] ?? { ok: true, reason: null };
+      const g = await getRoots(); roots.value = g.roots ?? []; error.value = null;
+      return addResult.value.ok;
+    } catch (e) { error.value = String(e); return false; }
+  }
+  async function removeRoot(id: number) {
+    try { await deleteRoot(id); const g = await getRoots(); roots.value = g.roots ?? []; error.value = null; }
     catch (e) { error.value = String(e); }
   }
-  return { settings, roots, error, saveState, load, save, addRoot };
+  return { settings, roots, error, saveState, addResult, load, save, addRoot, removeRoot };
 }

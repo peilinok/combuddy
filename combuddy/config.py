@@ -24,13 +24,40 @@ def detect_candidates(explicit: list[str] | None = None) -> list[dict]:
         out.append({"kind": kind, "path": rp, "label": os.path.basename(rp) or rp, "source": "manual"})
     return out
 
-def set_roots(conn: sqlite3.Connection, roots: list[dict]) -> None:
+def set_roots(conn: sqlite3.Connection, roots: list[dict]) -> list[dict]:
+    results = []
     for r in roots:
-        conn.execute(
+        real = os.path.realpath(r["path"])
+        if not os.path.isdir(real):
+            results.append({"path": r["path"], "ok": False, "reason": "not_a_directory"})
+            continue
+        cur = conn.execute(
             "INSERT OR IGNORE INTO roots(kind,path,label,source,enabled) VALUES(?,?,?,?,1)",
-            (r["kind"], os.path.realpath(r["path"]), r.get("label"), r.get("source", "manual")),
+            (r["kind"], real, r.get("label"), r.get("source", "manual")),
         )
+        results.append({"path": r["path"], "ok": cur.rowcount > 0,
+                        "reason": None if cur.rowcount > 0 else "duplicate"})
     conn.commit()
+    return results
+
+def remove_root(conn: sqlite3.Connection, root_id: int) -> bool:
+    if conn.execute("SELECT id FROM roots WHERE id=?", (root_id,)).fetchone() is None:
+        return False
+    mids = [r["id"] for r in conn.execute("SELECT id FROM models WHERE root_id=?", (root_id,))]
+    if mids:
+        ph = ",".join("?" * len(mids))
+        # 先解除边绑定(edges.model_id 无级联;引用回归 missing 语义),再删模型(civitai 级联删除)
+        conn.execute(f"UPDATE edges SET model_id=NULL, match_kind=NULL WHERE model_id IN ({ph})", mids)
+        conn.execute(f"DELETE FROM models WHERE id IN ({ph})", mids)
+    wids = [r["id"] for r in conn.execute("SELECT id FROM workflows WHERE root_id=?", (root_id,))]
+    if wids:
+        ph = ",".join("?" * len(wids))
+        conn.execute(f"DELETE FROM edges WHERE workflow_id IN ({ph})", wids)
+        conn.execute(f"DELETE FROM workflows WHERE id IN ({ph})", wids)
+    # 物理删除而非 enabled=0:path 有 UNIQUE 约束,软停用会让同一路径永远无法重新添加
+    conn.execute("DELETE FROM roots WHERE id=?", (root_id,))
+    conn.commit()
+    return True
 
 def get_roots(conn: sqlite3.Connection, kind: str | None = None) -> list[sqlite3.Row]:
     if kind:

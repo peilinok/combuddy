@@ -8,6 +8,9 @@ export default {
     civitaiEnrich: "Civitai Enrichment", onlineEnrich: "Auto-identify online after scan (hash only)",
     nsfwThreshold: "NSFW blur threshold (higher = less blurring)",
     roots: "Root Directories", pathPlaceholder: "Absolute directory path", add: "Add",
+    removeRoot: "Remove this root",
+    removeConfirm: "Remove {path} from the index?\nNo files on disk are deleted; indexed models/workflows under it are removed and can be restored by re-adding and scanning.",
+    dupRoot: "This directory is already listed", badRoot: "Directory does not exist or is not accessible",
   },
   theme: { palette: "Palette", mode: "Mode", modeAuto: "Follow system", modeLight: "Light", modeDark: "Dark" },
   roles: {

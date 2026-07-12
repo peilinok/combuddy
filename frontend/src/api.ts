@@ -27,6 +27,8 @@ export const getRoots = () => fetch("/api/roots").then(jsonOrThrow);
 export const setRoots = (roots: unknown[]) =>
   fetch("/api/roots", { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ roots }) }).then(jsonOrThrow);
+export const deleteRoot = (id: number) =>
+  fetch(`/api/roots/${id}`, { method: "DELETE" }).then(jsonOrThrow);
 
 const qs = (o: Record<string, string>) =>
   Object.entries(o).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");

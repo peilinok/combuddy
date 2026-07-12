@@ -8,6 +8,9 @@ export default {
     civitaiEnrich: "Civitai 富化", onlineEnrich: "扫描后自动联网识别(仅发送哈希)",
     nsfwThreshold: "NSFW 模糊阈值(越高越少模糊)",
     roots: "根目录", pathPlaceholder: "目录绝对路径", add: "添加",
+    removeRoot: "移除此目录",
+    removeConfirm: "从索引移除 {path}?\n不会删除磁盘上的任何文件;该目录下模型/工作流的索引记录将被清除,重新添加并扫描即可恢复。",
+    dupRoot: "该目录已在列表中", badRoot: "目录不存在或不可访问",
   },
   theme: { palette: "配色", mode: "明暗", modeAuto: "跟随系统", modeLight: "亮", modeDark: "暗" },
   roles: {

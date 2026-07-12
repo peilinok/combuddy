@@ -3,7 +3,8 @@ vi.mock("./api", () => ({
   getSettings: vi.fn().mockResolvedValue({ auto_hash: true, hash_workers: 1, hash_max_mbps: 0, online_enrich: true, nsfw_blur_threshold: 1 }),
   setSettings: vi.fn().mockResolvedValue({ auto_hash: true, hash_workers: 3, hash_max_mbps: 0, online_enrich: true, nsfw_blur_threshold: 1 }),
   getRoots: vi.fn().mockResolvedValue({ roots: [{ kind: "model", path: "/m" }] }),
-  setRoots: vi.fn().mockResolvedValue({ ok: true }),
+  setRoots: vi.fn().mockResolvedValue({ ok: true, results: [{ path: "/x", ok: true, reason: null }] }),
+  deleteRoot: vi.fn().mockResolvedValue({ ok: true }),
 }));
 import { useSettings } from "./useSettings";
 beforeEach(() => vi.useFakeTimers());
@@ -150,5 +151,26 @@ describe("useSettings", () => {
 
     expect(api.setSettings).toHaveBeenCalledTimes(2);
     expect(api.setSettings).toHaveBeenNthCalledWith(2, { online_enrich: false });
+  });
+  it("addRoot surfaces duplicate result", async () => {
+    const api = await import("./api");
+    (api.setRoots as any).mockReset()
+      .mockResolvedValueOnce({ ok: true, results: [{ path: "/m", ok: false, reason: "duplicate" }] });
+    (api.getRoots as any).mockReset().mockResolvedValueOnce({ roots: [{ kind: "model", path: "/m" }] });
+    const s = useSettings();
+    const ok = await s.addRoot("model", "/m");
+    expect(api.setRoots).toHaveBeenCalledTimes(1);
+    expect(ok).toBe(false);
+    expect(s.addResult.value?.reason).toBe("duplicate");
+  });
+  it("removeRoot deletes then reloads roots", async () => {
+    const api = await import("./api");
+    (api.deleteRoot as any).mockReset().mockResolvedValueOnce({ ok: true });
+    (api.getRoots as any).mockReset().mockResolvedValueOnce({ roots: [] });
+    const s = useSettings();
+    await s.removeRoot(5);
+    expect(api.deleteRoot).toHaveBeenCalledTimes(1);
+    expect(api.deleteRoot).toHaveBeenCalledWith(5);
+    expect(api.getRoots).toHaveBeenCalledTimes(1);
   });
 });

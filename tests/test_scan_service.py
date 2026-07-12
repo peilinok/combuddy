@@ -45,11 +45,12 @@ def test_run_scan_skips_bad_workflow_root_and_continues(tmp_path):
     good_wroot = tmp_path / "wf"; good_wroot.mkdir()
     (good_wroot/"a.json").write_text(json.dumps({"nodes": [
         {"type": "CheckpointLoaderSimple", "widgets_values": ["SD1.5/foo.safetensors"]}]}))
-    bad_wroot = tmp_path / "gone"          # 不存在于磁盘上
+    bad_wroot = tmp_path / "gone"; bad_wroot.mkdir()
     config.set_roots(conn, [
         {"kind":"model","path":str(mroot),"source":"manual"},
         {"kind":"workflow","path":str(good_wroot),"source":"manual"},
         {"kind":"workflow","path":str(bad_wroot),"source":"manual"}])
+    bad_wroot.rmdir()                       # 配置后离线,扫描仍应跳过并继续
     scan_service.run_scan(conn)
     assert scan_service.STATUS["running"] is False
     s = stats.get_stats(conn)
