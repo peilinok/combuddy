@@ -1,10 +1,21 @@
 <script setup lang="ts">
-import { onMounted, computed } from "vue";
+import { onMounted, onUnmounted, computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { useWorkflows } from "../useWorkflows";
+import { view, pendingWorkflowId, pendingModelId } from "../useNav";
 const { t } = useI18n();
 const { workflows, selected, load, select, error } = useWorkflows();
-onMounted(async () => { await load(); if (workflows.value[0]) select(workflows.value[0].id); });
+let active = true;
+onMounted(async () => {
+  const pw = pendingWorkflowId.value;
+  pendingWorkflowId.value = null;
+  await load();
+  if (!active) return;
+  const target = pw != null && workflows.value.some((w) => w.id === pw) ? pw : workflows.value[0]?.id;
+  if (target != null) select(target);
+});
+onUnmounted(() => { active = false; });
+function goModel(id: number) { pendingModelId.value = id; view.value = "library"; }
 const hit = computed(() => selected.value?.edges.filter((e: any) => e.status === "path" || e.status === "basename").length ?? 0);
 const ambiguous = computed(() => selected.value?.edges.filter((e: any) => e.status === "ambiguous").length ?? 0);
 const miss = computed(() => selected.value?.edges.filter((e: any) => e.status === "missing").length ?? 0);
@@ -36,6 +47,7 @@ const sortedEdges = computed(() =>
               : 'bg-primary/15 text-primary']">{{ t("workflow.st_" + e.status) }}</span>
           <span class="text-color truncate flex-1">{{ e.ref_string }}</span>
           <span v-if="e.status==='basename' && e.model_filename" class="text-color-secondary text-xs truncate max-w-48" :title="e.model_filename">→ {{ e.model_filename }}</span>
+          <span v-if="e.model_id != null" @click="goModel(e.model_id)" class="text-primary text-xs shrink-0 cursor-pointer hover:underline">{{ t("workflow.viewModel") }}</span>
           <span class="text-color-secondary text-xs shrink-0">{{ e.node_type }}</span>
         </div>
       </div>

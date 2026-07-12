@@ -18,6 +18,34 @@ describe("useLibrary", () => {
     const lib = useLibrary(); await lib.openDetail(1);
     expect(lib.selected.value.workflows[0].filename).toBe("w.json");
   });
+  it("openDetail drops a stale successful response", async () => {
+    const api = await import("./api");
+    let resolveFirst!: (v: any) => void;
+    (api.fetchModel as any)
+      .mockImplementationOnce(() => new Promise((res) => { resolveFirst = res; }))
+      .mockResolvedValueOnce({ id: 2, filename: "new.safetensors", workflows: [] });
+    const lib = useLibrary();
+    const first = lib.openDetail(1);
+    await lib.openDetail(2);
+    resolveFirst({ id: 1, filename: "old.safetensors", workflows: [] });
+    await first;
+    expect(lib.selected.value.id).toBe(2);
+  });
+  it("openDetail drops stale errors and clears errors on latest success", async () => {
+    const api = await import("./api");
+    let rejectFirst!: (e: any) => void;
+    (api.fetchModel as any)
+      .mockImplementationOnce(() => new Promise((_, rej) => { rejectFirst = rej; }))
+      .mockResolvedValueOnce({ id: 4, filename: "new.safetensors", workflows: [] });
+    const lib = useLibrary();
+    lib.error.value = "old error";
+    const first = lib.openDetail(3);
+    await lib.openDetail(4);
+    rejectFirst(new Error("stale error"));
+    await first;
+    expect(lib.selected.value.id).toBe(4);
+    expect(lib.error.value).toBeNull();
+  });
   it("load pulls models + settings; shouldBlur uses threshold", async () => {
     const lib = useLibrary();
     await lib.load();

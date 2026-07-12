@@ -39,7 +39,7 @@ export default {
   card: { refCount: "引用 {n}" },
   workflow: {
     title: "Workflow", hitMiss: "命中 {hit} · 缺失 {miss}", amb: "歧义 {n}", summary: "命中 {hit} · 歧义 {ambiguous} · 缺失 {miss}",
-    st_path: "命中", st_basename: "名称兜底", st_ambiguous: "歧义", st_missing: "缺失",
+    st_path: "命中", st_basename: "名称兜底", st_ambiguous: "歧义", st_missing: "缺失", viewModel: "查看模型",
   },
   cleanup: {
     title: "清理中心", unreferencedModels: "未被引用的模型", countUnused: "{n} 个 · 没有任何 workflow 使用它们",

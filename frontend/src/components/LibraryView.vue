@@ -3,6 +3,7 @@ import { onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useLibrary } from "../useLibrary";
 import { useDesktop } from "../useDesktop";
+import { view, pendingWorkflowId, pendingModelId } from "../useNav";
 import { humanSize } from "../format";
 import { displayLabel, isIdentified } from "../labels";
 import ModelCard from "./ModelCard.vue";
@@ -10,10 +11,19 @@ const { t } = useI18n();
 const { models, selected, search, flag, layout, revealed, lightbox, loading, load, searchInput, openDetail, error,
   shouldBlur, reveal, openLightbox, closeLightbox, typeFilter, pageFirst, collapsed, typeCounts, visibleModels } = useLibrary();
 const { isDesktop, reveal: revealInFinder, openExternal } = useDesktop();
+let active = true;
 function onKey(e: KeyboardEvent) { if (e.key === "Escape") closeLightbox(); }
-onMounted(() => { load(); window.addEventListener("keydown", onKey); });
-onUnmounted(() => window.removeEventListener("keydown", onKey));
+onMounted(async () => {
+  window.addEventListener("keydown", onKey);
+  const pm = pendingModelId.value;
+  pendingModelId.value = null;
+  await load();
+  if (!active) return;
+  if (pm != null) openDetail(pm);
+});
+onUnmounted(() => { active = false; window.removeEventListener("keydown", onKey); });
 function setFlag(f: string) { flag.value = flag.value === f ? "" : f; load(); }
+function goWorkflow(id: number) { pendingWorkflowId.value = id; view.value = "workflows"; }
 </script>
 <template>
   <div>
@@ -107,7 +117,8 @@ function setFlag(f: string) { flag.value = flag.value === f ? "" : f; load(); }
             </div>
           </div>
           <div class="text-color-secondary font-semibold mt-2">{{ t("library.refBy", { n: selected.workflows.length }) }}</div>
-          <div v-for="w in selected.workflows" :key="w.id" class="text-color-secondary">· {{ w.filename }}</div>
+          <div v-for="w in selected.workflows" :key="w.id" @click="goWorkflow(w.id)"
+            class="text-color-secondary cursor-pointer hover:text-primary">· {{ w.filename }} <i class="pi pi-arrow-up-right text-[10px]"></i></div>
           <div v-if="!selected.workflows.length" class="text-orange-400">{{ t("library.noRef") }}</div>
         </div>
       </div>

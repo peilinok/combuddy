@@ -15,6 +15,7 @@ export function useLibrary() {
   const error = ref<string | null>(null);
   const loading = ref(false);
   let seq = 0;
+  let detailSeq = 0;
   let settingsPromise: Promise<void> | null = null;
   let debounceTimer: number | undefined;
 
@@ -39,8 +40,13 @@ export function useLibrary() {
     debounceTimer = window.setTimeout(load, 300);
   }
   async function openDetail(id: number) {
+    const my = ++detailSeq;
     if (selected.value?.id === id) { selected.value = null; return; }
-    try { selected.value = await fetchModel(id); } catch (e) { error.value = String(e); }
+    try {
+      const detail = await fetchModel(id);
+      if (my !== detailSeq) return;
+      selected.value = detail; error.value = null;
+    } catch (e) { if (my === detailSeq) error.value = String(e); }
   }
   const shouldBlur = (level: number | null) => (level ?? 0) > nsfwThreshold.value;
   const reveal = (id: number) => { revealed.value = new Set(revealed.value).add(id); };

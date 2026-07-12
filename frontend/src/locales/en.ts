@@ -39,7 +39,7 @@ export default {
   card: { refCount: "Refs {n}" },
   workflow: {
     title: "Workflow", hitMiss: "Resolved {hit} · Missing {miss}", amb: "Ambiguous {n}", summary: "Resolved {hit} · Ambiguous {ambiguous} · Missing {miss}",
-    st_path: "Resolved", st_basename: "By name", st_ambiguous: "Ambiguous", st_missing: "Missing",
+    st_path: "Resolved", st_basename: "By name", st_ambiguous: "Ambiguous", st_missing: "Missing", viewModel: "View model",
   },
   cleanup: {
     title: "Cleanup Center", unreferencedModels: "Unreferenced Models", countUnused: "{n} · not used by any workflow",
