@@ -56,8 +56,17 @@ export default {
     hardlink: "与保留项在磁盘上是同一份数据的两个入口,删它不会释放空间,故不处理",
     allInUse: "都在使用中,暂无法清理",
     selectedSummary: "已为你选好 {n} 项 · 可回收 {size}(默认每组留一份)",
-    confirm: "将移动 {n} 个文件到可恢复回收站,可随时手动移出恢复。继续?",
+    confirm: "将移动 {n} 个文件到可恢复回收站,可在「回收站」标签页随时恢复。继续?",
     moveToTrash: "移至回收站",
+  },
+  trash: {
+    tab: "回收站", title: "回收站", occupied: "占用",
+    hint: "删除的文件都在这里(各根目录的 .combuddy-trash 下),可随时恢复",
+    empty: "回收站是空的",
+    restore: "恢复",
+    restoreResult: "已恢复 {n} 项 — 重新扫描后它们会回到模型库",
+    restoreConflict: "{n} 项因原路径已被占用而跳过",
+    restoreError: "{n} 项恢复失败",
   },
   setup: {
     title: "指认你的目录", modelDir: "模型目录(如 …/ComfyUI-Shared/models)",

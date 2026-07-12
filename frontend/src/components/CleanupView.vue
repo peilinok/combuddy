@@ -3,12 +3,14 @@ import { onMounted, computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { useCleanup } from "../useCleanup";
 import { useDuplicates } from "../useDuplicates";
+import { useTrash } from "../useTrash";
 import { cleanupTab } from "../useNav";
 import { humanSize } from "../format";
 const { t } = useI18n();
 const u = useCleanup();
 const d = useDuplicates();
-onMounted(() => { u.load(); d.load(); });
+const tr = useTrash();
+onMounted(() => { u.load(); d.load(); tr.load(); });
 const total = computed(() => u.items.value.reduce((s: number, m: any) => s + m.size, 0));
 function reason(g: any, m: any) {
   return m.ref_count > 0 ? t("duplicates.reasonRef") : t("duplicates.reasonPath");
@@ -32,6 +34,8 @@ async function onTrashUnref() {
         @click="cleanupTab='unreferenced'">{{ t("duplicates.tabUnref") }}</button>
       <button class="pb-2 text-sm" :class="cleanupTab==='duplicates' ? 'border-b-2 border-primary text-primary' : 'text-color-secondary'"
         @click="cleanupTab='duplicates'">{{ t("duplicates.tabDup") }} <span class="text-color-secondary">{{ d.groups.value.length || '' }}</span></button>
+      <button class="pb-2 text-sm" :class="cleanupTab==='trash' ? 'border-b-2 border-primary text-primary' : 'text-color-secondary'"
+        @click="cleanupTab='trash'; tr.load()">{{ t("trash.tab") }} <span class="text-color-secondary">{{ tr.items.value.length || '' }}</span></button>
     </div>
 
     <!-- 未引用(原样保留) -->
@@ -57,7 +61,7 @@ async function onTrashUnref() {
     </div>
 
     <!-- 重复 -->
-    <div v-else>
+    <div v-else-if="cleanupTab==='duplicates'">
       <div v-if="d.error.value" class="text-orange-400 text-sm mb-3">{{ d.error.value }}</div>
       <div class="text-sm text-color-secondary mb-3">
         {{ t("duplicates.summary", { groups: d.groups.value.length, size: humanSize(d.totalReclaimable.value) }) }}
@@ -91,6 +95,33 @@ async function onTrashUnref() {
         <span class="text-sm text-color-secondary">{{ t("duplicates.selectedSummary", { n: d.selectedIds.value.length, size: humanSize(d.selectedBytes.value) }) }}</span>
         <button @click="onTrash" class="px-4 py-1.5 rounded bg-primary text-white text-sm font-semibold">{{ t("duplicates.moveToTrash") }}</button>
       </div>
+    </div>
+
+    <!-- 回收站 -->
+    <div v-else>
+      <div v-if="tr.error.value" class="text-orange-400 text-sm mb-3">{{ tr.error.value }}</div>
+      <div v-if="tr.lastRestore.value" class="text-sm text-primary mb-3">
+        {{ t("trash.restoreResult", { n: tr.lastRestore.value.restored }) }}
+        <span v-if="tr.lastRestore.value.conflict" class="text-orange-400"> · {{ t("trash.restoreConflict", { n: tr.lastRestore.value.conflict }) }}</span>
+        <span v-if="tr.lastRestore.value.error" class="text-orange-400"> · {{ t("trash.restoreError", { n: tr.lastRestore.value.error }) }}</span>
+      </div>
+      <div class="flex justify-between items-center bg-surface-card rounded-lg p-4 mb-4">
+        <div><div class="font-semibold">{{ t("trash.title") }}</div>
+          <div class="text-xs text-color-secondary">{{ t("trash.hint") }}</div></div>
+        <div class="text-right"><div class="text-color text-xl font-bold">{{ humanSize(tr.totalBytes.value) }}</div>
+          <div class="text-[10px] text-color-secondary">{{ t("trash.occupied") }}</div></div>
+      </div>
+      <div v-if="!tr.items.value.length" class="text-color-secondary text-sm py-8 text-center">{{ t("trash.empty") }}</div>
+      <table v-else class="w-full text-sm"><tbody>
+        <tr v-for="it in tr.items.value" :key="it.id" class="hover:bg-surface-hover">
+          <td class="py-1.5 text-color truncate max-w-md" :title="it.model_path">{{ it.model_path }}</td>
+          <td class="text-color-secondary">{{ it.dir_type }}</td>
+          <td class="text-right text-color-secondary">{{ humanSize(it.size ?? 0) }}</td>
+          <td class="text-right text-color-secondary text-xs">{{ new Date(it.trashed_at * 1000).toLocaleString() }}</td>
+          <td class="text-right"><button @click="tr.restore([it.id])" :disabled="tr.restoring.value"
+            class="text-primary text-xs hover:underline disabled:opacity-50">{{ t("trash.restore") }}</button></td>
+        </tr>
+      </tbody></table>
     </div>
   </div>
 </template>

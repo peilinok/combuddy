@@ -56,8 +56,17 @@ export default {
     hardlink: "Two entries pointing at the same data on disk — deleting it frees nothing, so it's left alone",
     allInUse: "All in use — nothing to reclaim",
     selectedSummary: "{n} pre-selected · {size} reclaimable (one kept per group by default)",
-    confirm: "Move {n} files to the recoverable trash? You can restore them anytime.",
+    confirm: "Move {n} files to the recoverable trash? Restore them anytime from the Trash tab.",
     moveToTrash: "Move to trash",
+  },
+  trash: {
+    tab: "Trash", title: "Trash", occupied: "Occupied",
+    hint: "Deleted files live here (under each root's .combuddy-trash) and can be restored anytime",
+    empty: "Trash is empty",
+    restore: "Restore",
+    restoreResult: "{n} restored — run a scan to bring them back into the library",
+    restoreConflict: "{n} skipped (original path already occupied)",
+    restoreError: "{n} failed to restore",
   },
   setup: {
     title: "Point to your directories", modelDir: "Model directory (e.g. …/ComfyUI-Shared/models)",

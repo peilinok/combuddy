@@ -1,7 +1,7 @@
 import { ref } from "vue";
 
 export type View = "dashboard" | "library" | "workflows" | "cleanup" | "settings";
-export type CleanupTab = "unreferenced" | "duplicates";
+export type CleanupTab = "unreferenced" | "duplicates" | "trash";
 
 export const view = ref<View>("dashboard");
 export const cleanupTab = ref<CleanupTab>("unreferenced");
