@@ -4,7 +4,7 @@ from . import queries
 def _duplicate_waste(conn: sqlite3.Connection) -> int:
     return sum(g["reclaimable"] for g in queries.list_duplicate_groups(conn))
 
-def get_stats(conn: sqlite3.Connection) -> dict:
+def get_stats(conn: sqlite3.Connection, skip_duplicates: bool = False) -> dict:
     model_count = conn.execute("SELECT COUNT(*) c FROM models").fetchone()["c"]
     total_size = conn.execute("SELECT COALESCE(SUM(size),0) s FROM models").fetchone()["s"]
     workflow_count = conn.execute("SELECT COUNT(*) c FROM workflows").fetchone()["c"]
@@ -24,7 +24,7 @@ def get_stats(conn: sqlite3.Connection) -> dict:
         "hash_coverage": {"hashed": hashed, "total": model_count},
         "civitai_coverage": {"identified": identified, "total": model_count},
         "unreferenced_count": unref,
-        "duplicate_waste": _duplicate_waste(conn),
+        "duplicate_waste": None if skip_duplicates else _duplicate_waste(conn),
         "by_type": by_type,
     }
 

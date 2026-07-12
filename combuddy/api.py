@@ -32,10 +32,11 @@ def create_app(db_path: str, static_dir: str | None = None, demo: bool = False,
 
     @app.get("/api/stats")
     def get_stats():
+        status = dict(scan_service.STATUS)
         c = conn()
-        s = stats.get_stats(c)
-        s["scanning"] = scan_service.STATUS["running"]
-        s["scan"] = dict(scan_service.STATUS)
+        s = stats.get_stats(c, skip_duplicates=status["running"])
+        s["scanning"] = status["running"]
+        s["scan"] = status
         s["demo"] = demo
         s["desktop"] = desktop_state is not None
         if desktop_state and desktop_state.get("update"):

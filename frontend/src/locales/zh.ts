@@ -25,6 +25,7 @@ export default {
     baseCoverage: "base 识别", hashCoverage: "sha256 指纹", civitaiCoverage: "Civitai 识别",
     byType: "按类型占用",
     dupWaste: "可回收重复", dupNone: "无重复", dupCalc: "计算中",
+    scanErrors: "上次扫描跳过 {n} 项(部分文件或目录不可读)",
   },
   library: {
     title: "模型库", search: "搜索名称…", unknown: "未识别", unreferenced: "未被引用",

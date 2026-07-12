@@ -22,3 +22,30 @@ def test_scan_conflict_when_running(tmp_path):
         assert c.post("/api/scan").json()["started"] is False
     finally:
         scan_service.STATUS["running"] = False
+
+def test_stats_skips_duplicate_waste_while_scanning(tmp_path):
+    app = api.create_app(str(tmp_path / "c.sqlite")); c = TestClient(app)
+    assert c.get("/api/stats").json()["duplicate_waste"] == 0
+    scan_service.STATUS["running"] = True
+    try:
+        assert c.get("/api/stats").json()["duplicate_waste"] is None
+    finally:
+        scan_service.STATUS["running"] = False
+
+def test_stats_uses_consistent_scan_status_snapshot(tmp_path, monkeypatch):
+    original_get_stats = api.stats.get_stats
+    def finish_scan(conn, skip_duplicates=False):
+        result = original_get_stats(conn, skip_duplicates=skip_duplicates)
+        if skip_duplicates:
+            scan_service.STATUS["running"] = False
+        return result
+    monkeypatch.setattr(api.stats, "get_stats", finish_scan)
+    app = api.create_app(str(tmp_path / "c.sqlite")); c = TestClient(app)
+    scan_service.STATUS["running"] = True
+    try:
+        s = c.get("/api/stats").json()
+        assert s["duplicate_waste"] is None
+        assert s["scanning"] is True
+        assert s["scan"]["running"] is True
+    finally:
+        scan_service.STATUS["running"] = False

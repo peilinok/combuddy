@@ -25,6 +25,7 @@ export default {
     baseCoverage: "Base identified", hashCoverage: "sha256 hashed", civitaiCoverage: "Civitai identified",
     byType: "Usage by Type",
     dupWaste: "Reclaimable dupes", dupNone: "No duplicates", dupCalc: "Calculating",
+    scanErrors: "Last scan skipped {n} item(s) (some files or folders were unreadable)",
   },
   library: {
     title: "Model Library", search: "Search name…", unknown: "Unidentified", unreferenced: "Unreferenced",

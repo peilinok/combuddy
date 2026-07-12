@@ -66,6 +66,9 @@ const knobs = computed(() => [
         {{ scanning ? (stats.scan?.phase === 'hashing' ? t("dashboard.hashing") : stats.scan?.phase === 'enriching' ? t("dashboard.enriching") : t("dashboard.scanning")) : t("dashboard.scan") }}
       </button>
     </div>
+    <div v-if="stats.scan?.errors" class="text-orange-400 text-xs mb-3">
+      {{ t("dashboard.scanErrors", { n: stats.scan.errors }) }}
+    </div>
     <div v-if="scanning" class="mb-4">
       <div class="text-sm text-color-secondary mb-1">{{ phaseLabel }}</div>
       <ProgressBar v-if="phaseTotal" :value="Math.round(100 * phaseDone / phaseTotal)" />
