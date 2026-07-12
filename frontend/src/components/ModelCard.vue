@@ -9,7 +9,7 @@ defineEmits<{ (e: "zoom"): void; (e: "open"): void }>();
 <template>
   <div class="bg-surface-card border border-surface-border rounded-lg p-3 cursor-pointer hover:bg-surface-hover" @click="$emit('open')">
     <div class="aspect-square rounded bg-surface-hover mb-2 overflow-hidden flex items-center justify-center">
-      <img v-if="m.has_preview" :src="'/api/preview/' + m.sha256"
+      <img v-if="m.has_preview" :src="'/api/preview/' + m.sha256" loading="lazy"
         :class="['w-full h-full object-cover', blur ? 'blur-md' : '']" @click.stop="$emit('zoom')" />
       <i v-else class="pi pi-box text-3xl text-color-secondary"></i>
     </div>

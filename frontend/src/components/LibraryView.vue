@@ -48,9 +48,9 @@ function setFlag(f: string) { flag.value = flag.value === f ? "" : f; load(); }
         </div>
       </aside>
       <div class="flex-1 min-w-0">
-        <DataView :value="visibleModels" :layout="layout">
+        <DataView :value="visibleModels" :layout="layout" paginator :rows="60" :alwaysShowPaginator="false">
           <template #grid="{ items }">
-            <div class="grid grid-cols-4 gap-3">
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6 gap-3">
               <ModelCard v-for="m in items" :key="m.id" :m="m"
                 :blur="shouldBlur(m.nsfw_level) && !revealed.has(m.id)"
                 @zoom="openLightbox(m)" @open="openDetail(m.id)" />
@@ -66,7 +66,7 @@ function setFlag(f: string) { flag.value = flag.value === f ? "" : f; load(); }
                 <tr v-for="m in items" :key="m.id" @click="openDetail(m.id)" class="cursor-pointer hover:bg-surface-hover">
                   <td class="py-1.5 text-color">
                     <span class="inline-flex items-center gap-2">
-                      <img v-if="m.has_preview" :src="'/api/preview/' + m.sha256"
+                      <img v-if="m.has_preview" :src="'/api/preview/' + m.sha256" loading="lazy"
                         :class="['w-7 h-7 rounded object-cover cursor-zoom-in', shouldBlur(m.nsfw_level) && !revealed.has(m.id) ? 'blur-sm' : '']"
                         @click.stop="openLightbox(m)" />
                       {{ m.civitai_name || m.display_name || m.filename }}
