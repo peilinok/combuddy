@@ -7,108 +7,188 @@ A local-first dependency manager for your ComfyUI models and workflows — see w
 [![PyPI](https://img.shields.io/pypi/v/combuddy)](https://pypi.org/project/combuddy/)
 [![Python](https://img.shields.io/pypi/pyversions/combuddy)](https://pypi.org/project/combuddy/)
 
-<!-- TODO: replace hero with an animated demo.gif once recorded -->
 ![combuddy dashboard](https://raw.githubusercontent.com/peilinok/combuddy/main/.github/images/hero-dashboard.png)
 
-A model & workflow dependency manager for [ComfyUI](https://github.com/comfyanonymous/ComfyUI). Point it at your local model library and workflow files, and it shows you how they depend on each other — which workflows use which models, which models nothing uses, and which models a workflow is missing. **Local-first**: model identity (base architecture, precision, parameters) is computed from file headers; optional Civitai enrichment by content hash is on by default and toggleable in settings.
+combuddy indexes your local ComfyUI model library and workflow files, then shows the dependency graph in a web UI. It helps answer practical questions: which workflows use this model, which models are missing for a workflow, what is safe to move to recoverable trash, and which duplicate files are wasting disk space.
 
-## Why
+Screenshots in this README use the bundled demo data.
 
-Community workflows reference models by bare filename — no download link, no hash. Over time you lose track of what a model is, which workflows need it, and what's safe to delete. combuddy answers those from what's already on your disk:
+## Try It First
 
-- **Dashboard** — total models & size, base-architecture coverage, and how many models nothing references.
-- **Model library** — search/filter every model; click one to see its details and the **workflows that reference it** (reverse dependencies).
-- **Workflow resolution** — pick a workflow, see each referenced model marked **hit / ambiguous / missing**.
-- **Cleanup** — the models no workflow uses, with reclaimable space, moved to a **recoverable trash** (never a hard delete; only 0-reference models can go).
-- **Offline identity** — base architecture (SD1.5/SDXL/Flux/…, incl. GGUF), role labels (text encoder, VAE, ControlNet, …), and precision, all read straight from file headers.
-- **Civitai identity** — for models found on Civitai by content hash: real name, base model, trigger words, and a cached preview thumbnail with **HD zoom**. Enrichment sends **only the hash**, is on by default, and is toggleable in settings.
+Run the demo without adding combuddy to your Python environment:
 
-## Features
+```bash
+uvx combuddy demo
+```
 
-- **Model library + Civitai enrichment** — every model in one searchable, filterable grid, with real names, preview thumbnails, and trigger words looked up from Civitai by content hash (only the hash ever leaves your machine). Offline identity — base architecture, precision, parameter count — comes straight from local file headers, Civitai match or not.
+The demo opens the same app with bundled sample models and workflows. It uses a temporary database, does not scan your local library, does not write to `~/.combuddy`, and does not contact Civitai.
 
-  ![library](https://raw.githubusercontent.com/peilinok/combuddy/main/.github/images/library.png)
+## Install
 
-- **Reclaimable duplicate detection** — models are grouped by exact (byte-for-byte, sha256) content match, so you see at a glance how much disk space duplicates are wasting, then clear the unreferenced copies in one click to a recoverable trash.
+### Desktop App
 
-  ![duplicates](https://raw.githubusercontent.com/peilinok/combuddy/main/.github/images/duplicates.png)
+If you prefer a native window and no Python setup, download the latest desktop build from [Releases](https://github.com/peilinok/combuddy/releases/latest):
 
-- **Workflow dependency resolution** — pick a workflow and see every model it references marked hit, ambiguous, or missing, so you know what a shared workflow actually needs before you run it.
+- **macOS Apple Silicon:** `combuddy-X.Y.Z-macos-arm64.dmg`
+- **Windows x64 beta:** `combuddy-X.Y.Z-windows-x64.exe`
 
-## Install & run
+On macOS, open the DMG and drag `combuddy.app` into Applications. The macOS build is ad-hoc signed but not notarized, and the Windows build is unsigned, so your OS may show a one-time security prompt on first launch.
+
+### Terminal Install
 
 Requires Python 3.11+.
 
 ```bash
-pipx install combuddy   # recommended — isolated env, `combuddy` always on PATH
-pip install combuddy    # alternative, into your current environment
-uvx combuddy            # or run without installing (needs uv)
-
-combuddy         # scan your own model library and workflows
-combuddy demo    # zero-config tour: bundled sample data, no local library needed
+pipx install combuddy
+combuddy
 ```
 
-`combuddy` starts a local server on `http://127.0.0.1:8511` and opens your browser. On first run it **auto-detects** common ComfyUI installs (including the official Comfy Desktop) and offers them for one-click confirmation; if your library lives somewhere custom, you can point it there manually. It scans and populates the Dashboard in seconds. No library handy? `combuddy demo` seeds a temporary database with bundled sample models and workflows and opens the same UI — a full tour, no setup required.
-
-## Desktop app
-
-Prefer not to touch a terminal? Download the desktop app — no Python, no command line:
-
-- **macOS (Apple Silicon):** `combuddy-X.Y.Z-macos-arm64.dmg`
-- **Windows (x64):** `combuddy-X.Y.Z-windows-x64.exe` *(beta)*
-
-Get the latest from the [**Releases**](https://github.com/peilinok/combuddy/releases/latest) page. On macOS, open the DMG and drag `combuddy.app` into Applications; on Windows, run the `.exe`. It bundles everything and opens combuddy in a native window; first launch auto-detects your ComfyUI.
-
-### Unsigned app warnings
-
-The desktop app is not yet code-signed or notarized, so macOS and Windows cannot
-verify the publisher on first open. Download it only from the
-[Releases](https://github.com/peilinok/combuddy/releases/latest) page, then use
-the OS-provided one-time override:
-
-- **macOS:** after the first blocked launch, open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**. On older macOS versions, right-click `combuddy.app` in Finder → **Open** → confirm. If macOS still blocks it, run `xattr -c commbuddy.app` from the folder containing the app.
-- **Windows:** SmartScreen may say "Windows protected your PC". Click **More info** → **Run anyway**.
-
-Windows also needs Microsoft Edge WebView2 Runtime for the native window. If it
-is missing, combuddy shows a notice and opens the same local app in your browser
-instead of showing a blank window.
-
-The desktop app checks GitHub once at startup for a newer release. That request sends only a version query — **no model data, paths, or usage** — though, like any web request, GitHub sees your IP and user agent. The CLI and browser modes never make this check.
-
-Advanced terminal install for the same native window:
+You can also install into the current Python environment:
 
 ```bash
-pipx install "combuddy[desktop]"   # or: pip install "combuddy[desktop]"
+pip install combuddy
+combuddy
+```
+
+### Run Without Installing
+
+```bash
+uvx combuddy
+```
+
+## First Run
+
+`combuddy` starts a local server at `http://127.0.0.1:8511` and opens your browser. On first run it performs read-only detection of common ComfyUI locations, including the official Comfy Desktop, and shows candidates for you to confirm. If your library lives somewhere custom, you can add model and workflow directories manually.
+
+Initial model and workflow counts should appear quickly. Full SHA-256 hashing can continue in the background; if online enrichment is enabled, combuddy looks up Civitai metadata by content hash only.
+
+## What You Can Do
+
+### Dashboard
+
+See total model count, disk usage, base-architecture coverage, duplicate waste, and how much of your library is currently unreferenced.
+
+### Model Library
+
+Search and filter every indexed model. Open a model to see local metadata, optional Civitai identity, trigger words, cached preview images, and reverse dependencies: the workflows that reference that model.
+
+![library](https://raw.githubusercontent.com/peilinok/combuddy/main/.github/images/library.png)
+
+### Workflow Resolution
+
+Pick a workflow and inspect every referenced model. References are marked as resolved, ambiguous, or missing, so you can tell what a shared workflow needs before you run it.
+
+### Cleanup and Duplicates
+
+Review models that no workflow references and move them to a recoverable trash instead of deleting them permanently. Duplicate detection groups exact byte-for-byte matches by SHA-256 and helps identify unreferenced copies that can be reclaimed safely.
+
+![duplicates](https://raw.githubusercontent.com/peilinok/combuddy/main/.github/images/duplicates.png)
+
+## How It Works
+
+combuddy scans configured model directories and ComfyUI workflow JSON files into a local SQLite index. Workflow references are matched to local files by directory type plus normalized relative path, so subfolders, case differences, Unicode names, and backslashes are handled without relying on fragile basename-only guesses.
+
+Model identity is read locally from file headers where possible: base architecture, role labels, precision, and parameter counts. Content hashes are computed locally and cached for duplicate detection and optional Civitai enrichment.
+
+## Privacy & Network
+
+combuddy is local-first: model files, workflow files, and local filesystem paths stay on your machine. The local index is stored under `~/.combuddy` for normal runs.
+
+Two network paths are intentional and limited:
+
+- **Civitai enrichment** is on by default and can be turned off in Settings. Model lookup sends the locally computed SHA-256 hash to Civitai; model files and local paths are not uploaded. When a match is found, combuddy downloads and caches preview images.
+- **Desktop update checks** run only in the desktop app and `combuddy desktop`. They fetch GitHub latest-release metadata to decide whether to show an update banner. Plain `combuddy` and `combuddy demo` do not perform this check.
+
+The demo uses bundled sample data, a temporary database, and no online enrichment.
+
+## Desktop App Notes
+
+The desktop app bundles the same local FastAPI app and web UI into a native shell. On Windows, it needs Microsoft Edge WebView2 Runtime for the native window; if WebView2 is missing, combuddy shows a notice and opens the same local app in your browser.
+
+Unsigned app warnings are expected for current desktop builds. The macOS build is ad-hoc signed for packaging, but it is not yet code-signed or notarized as an Apple Developer ID release. The Windows build is an unsigned beta. Download desktop builds only from the [Releases](https://github.com/peilinok/combuddy/releases/latest) page.
+
+- **macOS:** after the first blocked launch, open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**. On older macOS versions, right-click `combuddy.app` in Finder → **Open** → confirm. If macOS still blocks it, run `xattr -c combuddy.app` from the folder containing the app.
+- **Windows:** SmartScreen may say "Windows protected your PC". Click **More info** → **Run anyway**.
+
+Advanced terminal install for the same native shell:
+
+```bash
+pipx install "combuddy[desktop]"
 combuddy desktop
 ```
 
-## How it works
+## For Developers
 
-- Scans model directories (skipping noise and its own trash), and parses ComfyUI workflow JSON for model references.
-- Matches references to local files by **directory type + normalized relative path** (handling subfolders, case, Unicode, and backslashes) — not by fragile basename guessing.
-- Computes content hashes for identity; optional Civitai enrichment sends only the hash to look up real names and metadata.
-- Stores everything in a single local SQLite index; the UI reads it live.
+### Prerequisites
 
-## Tech stack
+- Python 3.11+
+- Node 20 recommended, matching CI
 
-- **Backend:** Python 3.11+, FastAPI, standard-library `sqlite3` (no ORM). One command (`combuddy`) runs Uvicorn and serves both the API and the UI.
-- **Frontend:** Vue 3, Vite, PrimeVue, Tailwind — built into `combuddy/web/` and served by the backend, so the whole app installs as one package.
-
-## Development
+### Backend Service
 
 ```bash
-pip install -e ".[dev]"     # backend + test deps
-pytest -q                    # backend tests
-
-cd frontend
-npm install
-npm test                     # frontend tests (Vitest)
-npm run dev                  # dev server, proxies /api to :8511
-npm run build                # rebuild the bundle into ../combuddy/web
+pip install -e ".[dev]"
+combuddy
 ```
 
-After changing anything in `frontend/src`, run `npm run build` — the packaged app serves the committed `combuddy/web/` bundle.
+This starts the FastAPI/Uvicorn backend at `http://127.0.0.1:8511` and serves the built frontend from `combuddy/web`.
 
-## Status & roadmap
+### Frontend Dev Server
 
-Local-first, with optional Civitai enrichment (real names, preview images, and trigger words looked up by content hash — default on, toggleable) and a native **desktop app** for macOS and Windows with zero-config ComfyUI detection. Planned next: a download center for missing models, and dependency pinning for shareable, self-healing workflows.
+In a second terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Keep the backend running while using Vite. The dev server proxies `/api` to `http://127.0.0.1:8511`; open the Vite URL for hot module reload, not the backend's static page.
+
+### Demo-Backed UI Development
+
+Use the demo backend instead of the normal backend when you do not have a local ComfyUI library handy.
+
+Terminal 1:
+
+```bash
+combuddy demo
+```
+
+Terminal 2:
+
+```bash
+cd frontend
+npm run dev
+```
+
+The demo backend does not scan real files, write `~/.combuddy`, or use real path detection and scanning behavior.
+
+### Desktop Shell
+
+```bash
+pip install -e ".[dev,desktop]"
+combuddy desktop
+```
+
+The desktop shell serves the built frontend bundle. After changing `frontend/src`, run `npm run build` before testing those changes through `combuddy` or `combuddy desktop`.
+
+### Tests And Builds
+
+```bash
+pytest -q
+
+cd frontend
+npm test
+npm run build
+```
+
+`npm run build` writes the packaged frontend to `../combuddy/web`. Release builds also include this generated web bundle.
+
+For release and desktop packaging details, see [RELEASING.md](RELEASING.md).
+
+## Status & Roadmap
+
+combuddy is beta software for local ComfyUI library management. Current releases include local indexing, workflow resolution, duplicate detection, recoverable cleanup, optional Civitai enrichment, demo mode, and desktop builds for macOS Apple Silicon and Windows x64.
+
+Possible next areas include a download workflow for missing models and dependency pinning for shareable workflows. Those are roadmap ideas, not current product capabilities.
