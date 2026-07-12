@@ -8,6 +8,10 @@ onMounted(async () => { await load(); if (workflows.value[0]) select(workflows.v
 const hit = computed(() => selected.value?.edges.filter((e: any) => e.status === "path" || e.status === "basename").length ?? 0);
 const ambiguous = computed(() => selected.value?.edges.filter((e: any) => e.status === "ambiguous").length ?? 0);
 const miss = computed(() => selected.value?.edges.filter((e: any) => e.status === "missing").length ?? 0);
+const STATUS_RANK: Record<string, number> = { missing: 0, ambiguous: 1, basename: 2, path: 3 };
+const sortedEdges = computed(() =>
+  [...(selected.value?.edges ?? [])].sort((a: any, b: any) =>
+    (STATUS_RANK[a.status] ?? 9) - (STATUS_RANK[b.status] ?? 9)));
 </script>
 <template>
   <div>
@@ -24,10 +28,15 @@ const miss = computed(() => selected.value?.edges.filter((e: any) => e.status ==
       </div>
       <div v-if="selected" class="flex-1">
         <div class="text-color-secondary text-sm mb-3">{{ t("workflow.summary", { hit, ambiguous, miss }) }}</div>
-        <div v-for="(e, i) in selected.edges" :key="e.ref_string + '|' + e.node_type + '|' + i" class="flex items-center gap-2 text-sm py-1">
-          <span :class="e.status==='missing' ? 'text-orange-400' : e.status==='ambiguous' ? 'text-yellow-500' : 'text-primary'">●</span>
+        <div v-for="(e, i) in sortedEdges" :key="e.ref_string + '|' + e.node_type + '|' + i" class="flex items-center gap-2 text-sm py-1">
+          <span :class="['text-[11px] px-1.5 py-0.5 rounded shrink-0',
+              e.status==='missing' ? 'bg-orange-400/15 text-orange-400'
+              : e.status==='ambiguous' ? 'bg-yellow-500/15 text-yellow-500'
+              : e.status==='basename' ? 'bg-surface-hover text-color-secondary'
+              : 'bg-primary/15 text-primary']">{{ t("workflow.st_" + e.status) }}</span>
           <span class="text-color truncate flex-1">{{ e.ref_string }}</span>
-          <span class="text-color-secondary text-xs">{{ e.node_type }}</span>
+          <span v-if="e.status==='basename' && e.model_filename" class="text-color-secondary text-xs truncate max-w-48" :title="e.model_filename">→ {{ e.model_filename }}</span>
+          <span class="text-color-secondary text-xs shrink-0">{{ e.node_type }}</span>
         </div>
       </div>
     </div>

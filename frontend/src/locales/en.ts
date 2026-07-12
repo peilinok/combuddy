@@ -37,7 +37,10 @@ export default {
     refBy: "Referenced by — used in {n} workflow(s)", noRef: "Not referenced by any workflow (cleanable)",
   },
   card: { refCount: "Refs {n}" },
-  workflow: { title: "Workflow", hitMiss: "Resolved {hit} · Missing {miss}", amb: "Ambiguous {n}", summary: "Resolved {hit} · Ambiguous {ambiguous} · Missing {miss}" },
+  workflow: {
+    title: "Workflow", hitMiss: "Resolved {hit} · Missing {miss}", amb: "Ambiguous {n}", summary: "Resolved {hit} · Ambiguous {ambiguous} · Missing {miss}",
+    st_path: "Resolved", st_basename: "By name", st_ambiguous: "Ambiguous", st_missing: "Missing",
+  },
   cleanup: {
     title: "Cleanup Center", unreferencedModels: "Unreferenced Models", countUnused: "{n} · not used by any workflow",
     reclaimable: "Reclaimable", selectedSummary: "{n} selected · {size} · all 0 refs, safe to remove", moveToTrash: "Move to Trash",
