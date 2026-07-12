@@ -1,6 +1,11 @@
-# combuddy
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/peilinok/combuddy/main/.github/images/banner-dark.png">
+    <img alt="combuddy — 你的 ComfyUI 依赖管家 · Your ComfyUI model librarian" width="640" src="https://raw.githubusercontent.com/peilinok/combuddy/main/.github/images/banner-light.png">
+  </picture>
+</p>
 
-A local-first dependency manager for your ComfyUI models and workflows — see what's used, what's missing, and what's safe to delete.
+<p align="center">A local-first dependency manager for your ComfyUI models and workflows — see what's used, what's missing, and what's safe to delete.</p>
 
 [![CI](https://github.com/peilinok/combuddy/actions/workflows/ci.yml/badge.svg)](https://github.com/peilinok/combuddy/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)

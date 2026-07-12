@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 120" fill="none" role="img" aria-label="combuddy — 你的 ComfyUI 依赖管家">
+  <g transform="translate(8,14)">
+    <path d="M27 53 L44 69 L74 30" stroke="#34d399" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="27" cy="53" r="7.5" fill="#34d399"/>
+    <circle cx="44" cy="69" r="7.5" fill="#34d399"/>
+    <circle cx="74" cy="30" r="9" fill="#34d399"/>
+  </g>
+  <text x="120" y="62" font-family="system-ui,-apple-system,'Segoe UI',Inter,sans-serif" font-size="46" font-weight="600" letter-spacing="-1.5"><tspan fill="#e2e8f0">com</tspan><tspan fill="#34d399">buddy</tspan></text>
+  <text x="122" y="94" font-family="system-ui,-apple-system,'Segoe UI',Inter,sans-serif" font-size="16" fill="#94a3b8">你的 ComfyUI 依赖管家 · Your ComfyUI model librarian</text>
+</svg>
