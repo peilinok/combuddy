@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" role="img" aria-label="combuddy">
+  <path d="M27 53 L44 69 L74 30" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="27" cy="53" r="7.5" fill="currentColor"/>
+  <circle cx="44" cy="69" r="7.5" fill="currentColor"/>
+  <circle cx="74" cy="30" r="9" fill="currentColor"/>
+</svg>
