@@ -43,7 +43,7 @@ export default {
   },
   cleanup: {
     title: "清理中心", unreferencedModels: "未被引用的模型", countUnused: "{n} 个 · 没有任何 workflow 使用它们",
-    reclaimable: "可回收", selectedSummary: "已选 {n} 项 · {size} · 均 0 引用,可安全移除", moveToTrash: "移至回收站",
+    reclaimable: "可回收", selectedSummary: "已选 {n} 项 · {size} · 均 0 引用,可安全移除", confirm: "将把 {n} 个文件({size})移入可恢复回收站。继续?", moveToTrash: "移至回收站",
   },
   duplicates: {
     tabUnref: "未引用", tabDup: "重复",

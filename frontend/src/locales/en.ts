@@ -43,7 +43,7 @@ export default {
   },
   cleanup: {
     title: "Cleanup Center", unreferencedModels: "Unreferenced Models", countUnused: "{n} · not used by any workflow",
-    reclaimable: "Reclaimable", selectedSummary: "{n} selected · {size} · all 0 refs, safe to remove", moveToTrash: "Move to Trash",
+    reclaimable: "Reclaimable", selectedSummary: "{n} selected · {size} · all 0 refs, safe to remove", confirm: "Move {n} file(s) ({size}) to the recoverable trash?", moveToTrash: "Move to Trash",
   },
   duplicates: {
     tabUnref: "Unreferenced", tabDup: "Duplicates",

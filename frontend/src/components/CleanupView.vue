@@ -19,6 +19,10 @@ async function onTrash() {
   if (!window.confirm(t("duplicates.confirm", { n: d.selectedIds.value.length }))) return;
   await d.trashSelected();
 }
+async function onTrashUnref() {
+  if (!window.confirm(t("cleanup.confirm", { n: u.selectedIds.value.size, size: humanSize(u.selectedBytes.value) }))) return;
+  await u.trashSelected();
+}
 </script>
 <template>
   <div>
@@ -46,9 +50,9 @@ async function onTrash() {
           <td class="text-right text-color-secondary">{{ humanSize(m.size) }}</td>
         </tr>
       </tbody></table>
-      <div v-if="u.selectedIds.value.size" class="flex justify-between items-center bg-surface-hover rounded-lg p-3 mt-4">
+      <div v-if="u.selectedIds.value.size" class="flex justify-between items-center bg-surface-hover rounded-lg p-3 mt-4 sticky bottom-3">
         <span class="text-sm text-color-secondary">{{ t("cleanup.selectedSummary", { n: u.selectedIds.value.size, size: humanSize(u.selectedBytes.value) }) }}</span>
-        <button @click="u.trashSelected" class="px-4 py-1.5 rounded bg-primary text-white text-sm font-semibold">{{ t("cleanup.moveToTrash") }}</button>
+        <button @click="onTrashUnref" class="px-4 py-1.5 rounded bg-primary text-white text-sm font-semibold">{{ t("cleanup.moveToTrash") }}</button>
       </div>
     </div>
 
