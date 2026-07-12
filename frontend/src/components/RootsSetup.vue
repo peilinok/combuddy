@@ -11,6 +11,7 @@ const { candidates, loading, load } = useDetect();
 const { isDesktop, pickFolder } = useDesktop();
 const manual = ref(false);
 const modelPath = ref(""); const workflowPath = ref("");
+const setupError = ref("");
 onMounted(load);
 async function browse(target: "model" | "workflow") {
   const p = await pickFolder();
@@ -21,15 +22,23 @@ async function saveManual() {
   if (modelPath.value) roots.push({ kind: "model", path: modelPath.value, source: "manual" });
   if (workflowPath.value) roots.push({ kind: "workflow", path: workflowPath.value, source: "manual" });
   if (roots.length) {
-    await setRoots(roots);
-    try { await postScan(); } catch { /* scan-start failure must not block */ }
-    emit("done");
+    setupError.value = "";
+    try {
+      const r = await setRoots(roots);
+      if (!r.results?.some((result: any) => result.ok)) {
+        setupError.value = t(r.results?.[0]?.reason === "duplicate" ? "settings.dupRoot" : "settings.badRoot");
+        return;
+      }
+      try { await postScan(); } catch { /* scan-start failure must not block */ }
+      emit("done");
+    } catch (e: any) { setupError.value = String(e?.message ?? e); }
   }
 }
 </script>
 <template>
   <div class="max-w-lg mx-auto mt-20 bg-surface-card rounded-xl p-6">
     <div class="text-lg font-semibold text-color mb-4">{{ t("setup.title") }}</div>
+    <div v-if="setupError" class="text-red-400 text-sm mb-3">{{ setupError }}</div>
     <DetectPanel v-if="!manual && (loading || candidates.length)" @done="emit('done')" />
     <template v-if="!loading && !candidates.length || manual">
       <label class="block text-xs text-color-secondary mb-1">{{ t("setup.modelDir") }}</label>

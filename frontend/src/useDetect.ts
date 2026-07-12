@@ -40,9 +40,20 @@ export function useDetect() {
     const roots = candidates.value
       .filter((c) => selected.value.has(c.path))
       .map((c) => ({ kind: c.kind, path: c.path, source: "detected" }));
-    if (!roots.length) return;
-    await setRoots(roots);
-    try { await postScan(); } catch { /* scan-start failure must not block */ }
+    if (!roots.length) return false;
+    try {
+      const r = await setRoots(roots);
+      if (!r.results?.some((result: any) => result.ok)) {
+        error.value = r.results?.[0]?.reason ?? "not_a_directory";
+        return false;
+      }
+      error.value = "";
+      try { await postScan(); } catch { /* scan-start failure must not block */ }
+      return true;
+    } catch (e: any) {
+      error.value = String(e?.message ?? e);
+      return false;
+    }
   }
 
   return { candidates, skipped, loading, error, selected, load, toggle, confirm };

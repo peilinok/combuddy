@@ -20,13 +20,15 @@ export function useSettings() {
   let inFlight = false;
   let flushDue = false;
   let revision = 0;
+  let rootsSeq = 0;
   const hasPending = () => Object.keys(pending).length > 0;
   async function load() {
     const startedAt = revision;
+    const rootsRequest = ++rootsSeq;
     const dirtyAtStart = inFlight || hasPending();
     try { const [s, r] = await Promise.all([getSettings(), getRoots()]);
       if (!dirtyAtStart && startedAt === revision && !inFlight && !hasPending()) { settings.value = s; error.value = null; }
-      roots.value = r.roots ?? [];
+      if (rootsRequest === rootsSeq) roots.value = r.roots ?? [];
     } catch (e) { error.value = String(e); }
   }
   async function flush() {
@@ -62,15 +64,23 @@ export function useSettings() {
     }, 400);
   }
   async function addRoot(kind: string, path: string) {
+    const rootsRequest = ++rootsSeq;
     try {
       const r = await setRoots([{ kind, path, source: "manual" }]);
       addResult.value = r.results?.[0] ?? { ok: true, reason: null };
-      const g = await getRoots(); roots.value = g.roots ?? []; error.value = null;
+      const g = await getRoots();
+      if (rootsRequest === rootsSeq) roots.value = g.roots ?? [];
+      error.value = null;
       return addResult.value.ok;
     } catch (e) { error.value = String(e); return false; }
   }
   async function removeRoot(id: number) {
-    try { await deleteRoot(id); const g = await getRoots(); roots.value = g.roots ?? []; error.value = null; }
+    const rootsRequest = ++rootsSeq;
+    try {
+      await deleteRoot(id); const g = await getRoots();
+      if (rootsRequest === rootsSeq) roots.value = g.roots ?? [];
+      error.value = null;
+    }
     catch (e) { error.value = String(e); }
   }
   return { settings, roots, error, saveState, addResult, load, save, addRoot, removeRoot };

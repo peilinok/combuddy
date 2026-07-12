@@ -37,6 +37,19 @@ def test_single_flight(tmp_path, monkeypatch):
     finally:
         scan_service.STATUS["running"] = False
 
+def test_run_scan_holds_mutation_guard(tmp_path, monkeypatch):
+    conn = db.connect(str(tmp_path/"c.sqlite")); db.init_schema(conn)
+    root = tmp_path / "models"; root.mkdir()
+    config.set_roots(conn, [{"kind": "model", "path": str(root)}])
+    held = []
+    def inspect_guard(*_args):
+        with scan_service.mutation_guard(blocking=False) as acquired:
+            held.append(not acquired)
+        return {}
+    monkeypatch.setattr(scan_service.scanner, "scan_model_root", inspect_guard)
+    scan_service.run_scan(conn)
+    assert held == [True]
+
 def test_run_scan_skips_bad_workflow_root_and_continues(tmp_path):
     conn = db.connect(str(tmp_path/"c.sqlite")); db.init_schema(conn)
     mroot = tmp_path / "models"; (mroot/"checkpoints"/"SD1.5").mkdir(parents=True)

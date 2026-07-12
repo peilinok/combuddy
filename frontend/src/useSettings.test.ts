@@ -173,4 +173,24 @@ describe("useSettings", () => {
     expect(api.deleteRoot).toHaveBeenCalledWith(5);
     expect(api.getRoots).toHaveBeenCalledTimes(1);
   });
+  it("does not let a slow load overwrite roots added while it was pending", async () => {
+    const api = await import("./api");
+    let resolveSettings!: (value: any) => void;
+    (api.getSettings as any).mockReset()
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveSettings = resolve; }));
+    (api.getRoots as any).mockReset()
+      .mockResolvedValueOnce({ roots: [{ id: 1, kind: "model", path: "/old" }] })
+      .mockResolvedValueOnce({ roots: [{ id: 1, kind: "model", path: "/old" }, { id: 2, kind: "model", path: "/new" }] });
+    (api.setRoots as any).mockReset().mockResolvedValueOnce({ ok: true, results: [
+      { path: "/new", ok: true, reason: null }] });
+    const s = useSettings();
+    const loading = s.load();
+    expect(await s.addRoot("model", "/new")).toBe(true);
+    expect(s.roots.value.map((r: any) => r.path)).toEqual(["/old", "/new"]);
+
+    resolveSettings({ auto_hash: true, hash_workers: 1, hash_max_mbps: 0,
+      online_enrich: true, nsfw_blur_threshold: 1 });
+    await loading;
+    expect(s.roots.value.map((r: any) => r.path)).toEqual(["/old", "/new"]);
+  });
 });

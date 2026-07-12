@@ -4,12 +4,14 @@ import { useDetect } from "../useDetect";
 const { t } = useI18n();
 const emit = defineEmits<{ (e: "done"): void }>();
 const { candidates, skipped, loading, error, selected, toggle, confirm } = useDetect();
-async function go() { await confirm(); emit("done"); }
+async function go() { if (await confirm()) emit("done"); }
 </script>
 <template>
   <div>
     <div v-if="loading" class="text-color-secondary text-sm">{{ t("detect.scanning") }}</div>
-    <div v-else-if="error" class="text-red-400 text-sm">{{ error }}</div>
+    <div v-else-if="error" class="text-red-400 text-sm">
+      {{ error === "duplicate" ? t("settings.dupRoot") : error === "not_a_directory" ? t("settings.badRoot") : error }}
+    </div>
     <template v-else>
       <label v-for="c in candidates" :key="c.path"
         class="flex items-center gap-2 py-1 text-sm cursor-pointer">

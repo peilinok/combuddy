@@ -22,7 +22,9 @@ export function useWorkflows() {
   watch([scanning, scanRevision], async ([now, revision], [was, previousRevision]) => {
     if (!(was && !now) && revision === previousRevision) return;
     const selectedId = selected.value?.id;
+    const selectedSeq = selectSeq;
     await load();
+    if (selectSeq !== selectedSeq) return;
     if (selectedId == null) return;
     if (workflows.value.some((w) => w.id === selectedId)) await select(selectedId);
     else selected.value = null;

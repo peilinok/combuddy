@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 from combuddy import api, scan_service
+from contextlib import contextmanager
 
 def test_stats_and_scan_flow(tmp_path):
     app = api.create_app(str(tmp_path / "c.sqlite"))
@@ -87,3 +88,19 @@ def test_remove_root_unbinds_edges(tmp_path):
     e = conn.execute("SELECT model_id, match_kind FROM edges").fetchone()
     assert e["model_id"] is None and e["match_kind"] is None
     assert conn.execute("SELECT COUNT(*) c FROM models").fetchone()["c"] == 0
+
+def test_root_delete_and_trash_use_scan_mutation_guard(tmp_path, monkeypatch):
+    calls = []
+    @contextmanager
+    def guard(blocking=True):
+        calls.append(blocking)
+        yield True
+    monkeypatch.setattr(scan_service, "mutation_guard", guard)
+    app = api.create_app(str(tmp_path / "c.sqlite")); c = TestClient(app)
+    root = tmp_path / "m"; root.mkdir()
+    c.post("/api/roots", json={"roots": [{"kind": "model", "path": str(root)}]})
+    rid = c.get("/api/roots").json()["roots"][0]["id"]
+
+    assert c.post("/api/cleanup/trash", json={"model_ids": []}).status_code == 200
+    assert c.delete(f"/api/roots/{rid}").status_code == 200
+    assert calls == [True, True]

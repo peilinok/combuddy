@@ -69,4 +69,26 @@ describe("useWorkflows", () => {
     await vi.waitFor(() => expect(api.fetchWorkflowResolution).toHaveBeenCalledWith(1));
     expect(w.selected.value.id).toBe(1);
   });
+  it("does not restore an old selection after the user selects during reload", async () => {
+    const api = await import("./api");
+    let resolveReload!: (value: any) => void;
+    (api.fetchWorkflows as any).mockReset()
+      .mockResolvedValueOnce({ workflows: [{ id: 1 }, { id: 2 }] })
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveReload = resolve; }));
+    (api.fetchWorkflowResolution as any).mockReset()
+      .mockImplementation((id: number) => Promise.resolve({ id, filename: `${id}.json`, edges: [] }));
+    const w = make();
+    await w.load(); await w.select(1);
+    (api.fetchWorkflowResolution as any).mockClear();
+
+    stats.value = { scanning: false, scan: { phase: "idle", revision: 1 } };
+    await nextTick();
+    await w.select(2);
+    const reloaded = [{ id: 1, reloaded: true }, { id: 2, reloaded: true }];
+    resolveReload({ workflows: reloaded });
+    await vi.waitFor(() => expect(w.workflows.value).toEqual(reloaded));
+
+    expect(w.selected.value.id).toBe(2);
+    expect((api.fetchWorkflowResolution as any).mock.calls.map((c: any[]) => c[0])).toEqual([2]);
+  });
 });

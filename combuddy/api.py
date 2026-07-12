@@ -58,7 +58,8 @@ def create_app(db_path: str, static_dir: str | None = None, demo: bool = False,
 
     @app.delete("/api/roots/{root_id}")
     def delete_root(root_id: int):
-        c = conn(); ok = config.remove_root(c, root_id); c.close()
+        with scan_service.mutation_guard():
+            c = conn(); ok = config.remove_root(c, root_id); c.close()
         if not ok:
             return JSONResponse({"error": "not found"}, status_code=404)
         return {"ok": True}
@@ -131,7 +132,8 @@ def create_app(db_path: str, static_dir: str | None = None, demo: bool = False,
 
     @app.post("/api/cleanup/trash")
     def api_trash(body: dict):
-        c = conn(); res = trash.move_to_trash(c, body.get("model_ids", [])); c.close()
+        with scan_service.mutation_guard():
+            c = conn(); res = trash.move_to_trash(c, body.get("model_ids", [])); c.close()
         return res
 
     @app.get("/api/cleanup/trash")
