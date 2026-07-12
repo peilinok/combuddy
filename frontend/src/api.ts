@@ -1,5 +1,23 @@
+export class ApiError extends Error {
+  status: number;
+  detail: string | null;
+
+  constructor(status: number, detail: string | null) {
+    super("HTTP " + status + (detail ? " · " + detail : ""));
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
 async function jsonOrThrow(r: Response) {
-  if (!r.ok) throw new Error("HTTP " + r.status);
+  if (!r.ok) {
+    let detail: unknown = null;
+    try {
+      const body = await r.json();
+      detail = body?.reason ?? body?.error ?? body?.detail ?? null;
+    } catch { /* 非 JSON 错误体：仅保留状态码 */ }
+    throw new ApiError(r.status, typeof detail === "string" ? detail : null);
+  }
   return r.json();
 }
 
