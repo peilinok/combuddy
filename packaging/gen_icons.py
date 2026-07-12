@@ -1,4 +1,4 @@
-"""One-off: generate placeholder .icns/.ico. Pillow imported lazily (dev-only)."""
+"""One-off: generate combuddy .icns/.ico (node-check mark). Pillow imported lazily (dev-only)."""
 import os
 import subprocess
 import sys
@@ -8,10 +8,17 @@ OUT = os.path.join(os.path.dirname(__file__), "icons")
 
 def _base_png(size: int):
     from PIL import Image, ImageDraw
-    img = Image.new("RGB", (size, size), (30, 33, 41))
+    s = size
+    img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    d.rounded_rectangle([size * 0.18, size * 0.18, size * 0.82, size * 0.82],
-                        radius=size * 0.12, fill=(59, 130, 246))
+    d.rounded_rectangle([0, 0, s - 1, s - 1], radius=int(s * 0.22), fill=(16, 185, 129, 255))
+    def _p(x, y): return (x / 100 * s, y / 100 * s)
+    pts = [_p(27, 53), _p(44, 69), _p(74, 30)]
+    white = (255, 255, 255, 255)
+    d.line([pts[0], pts[1], pts[2]], fill=white, width=max(2, int(s * 0.075)), joint="curve")
+    for (cx, cy), rr in zip(pts, (0.08, 0.08, 0.095)):
+        rad = rr * s
+        d.ellipse([cx - rad, cy - rad, cx + rad, cy + rad], fill=white)
     return img
 
 
