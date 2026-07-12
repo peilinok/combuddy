@@ -1,5 +1,5 @@
 export default {
-  nav: { dashboard: "Dashboard", library: "Model Library", workflows: "Workflow", cleanup: "Cleanup", settings: "Settings" },
+  nav: { dashboard: "Dashboard", library: "Model Library", workflows: "Workflow", cleanup: "Cleanup", settings: "Settings", scanBadge: "Scanning…" },
   common: { subtitle: "Models & dependency manager" },
   settings: {
     title: "Settings", saving: "Saving…", saved: "Saved ✓", appearance: "Appearance", language: "Language", langZh: "中文", langEn: "English",

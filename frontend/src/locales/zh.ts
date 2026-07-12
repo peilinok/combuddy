@@ -1,5 +1,5 @@
 export default {
-  nav: { dashboard: "Dashboard", library: "模型库", workflows: "Workflow", cleanup: "清理中心", settings: "设置" },
+  nav: { dashboard: "Dashboard", library: "模型库", workflows: "Workflow", cleanup: "清理中心", settings: "设置", scanBadge: "扫描中…" },
   common: { subtitle: "模型与依赖管家" },
   settings: {
     title: "设置", saving: "保存中…", saved: "已保存 ✓", appearance: "外观", language: "语言", langZh: "中文", langEn: "English",

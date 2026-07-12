@@ -1,15 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from "vue";
+import { computed, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useDashboard } from "../useDashboard";
 import { humanSize } from "../format";
 import { view, cleanupTab } from "../useNav";
 import { demo } from "../useDemo";
 const { t } = useI18n();
-const { stats, scanning, error, startScan, cancelHash,
-  refresh, startPolling, stopPolling } = useDashboard();
-onMounted(async () => { await refresh(); startPolling(); });
-onUnmounted(stopPolling);
+const { stats, scanning, error, startScan, cancelHash, refresh } = useDashboard();
+onMounted(refresh);
 
 const byTypeRows = computed(() => {
   const rows = (stats.value.by_type ?? []).map((t: any) => ({ dir_type: t.dir_type, size: t.size }));

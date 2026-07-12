@@ -1,5 +1,6 @@
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { fetchDuplicates, postTrash } from "./api";
+import { scanning, scanRevision } from "./useScanStatus";
 
 export function reclaimableOf(members: any[], keepId: number): number {
   const keepInode = members.find((m) => m.id === keepId)?.inode;   // 相对当前保留项
@@ -48,6 +49,9 @@ export function useDuplicates() {
       if (skippedWarning) error.value = skippedWarning;
     } catch (e) { error.value = String(e); }
   }
+  watch([scanning, scanRevision], ([now, revision], [was, previousRevision]) => {
+    if ((was && !now) || revision !== previousRevision) load();
+  });
   return { groups, keepIds, unhashedCount, totalReclaimable, error,
            selectedBytes, selectedIds, keepId, deleteIdsOf, setKeep, trashSelected, load };
 }

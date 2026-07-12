@@ -3,7 +3,8 @@ from . import config, scanner, workflows, resolver, headers, hashes, civitai
 
 STATUS = {"running": False, "phase": "idle", "models_found": 0,
           "bases_done": 0, "workflows_done": 0, "errors": 0,
-          "hash_done": 0, "hash_total": 0, "enrich_done": 0, "enrich_total": 0, "cancel": False}
+          "hash_done": 0, "hash_total": 0, "enrich_done": 0, "enrich_total": 0,
+          "cancel": False, "revision": 0}
 _LOCK = threading.Lock()
 
 def run_scan(conn: sqlite3.Connection) -> dict:
@@ -67,4 +68,4 @@ def run_scan(conn: sqlite3.Connection) -> dict:
                 should_cancel=lambda: STATUS["cancel"])
         return {"models": STATUS["models_found"], "workflows": STATUS["workflows_done"]}
     finally:
-        STATUS.update(running=False, phase="idle")
+        STATUS.update(running=False, phase="idle", revision=STATUS["revision"] + 1)

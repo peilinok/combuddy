@@ -1,5 +1,6 @@
 import { computed, ref, watch } from "vue";
 import { fetchModels, fetchModel, getSettings } from "./api";
+import { scanning, scanRevision } from "./useScanStatus";
 
 export function useLibrary() {
   const models = ref<any[]>([]);
@@ -59,6 +60,9 @@ export function useLibrary() {
   });
   const visibleModels = computed(() => typeFilter.value ? models.value.filter((m) => m.dir_type === typeFilter.value) : models.value);
   watch([search, flag, typeFilter], () => { pageFirst.value = 0; });
+  watch([scanning, scanRevision], ([now, revision], [was, previousRevision]) => {
+    if ((was && !now) || revision !== previousRevision) load();
+  });
 
   return { models, selected, search, flag, layout, revealed, lightbox, error, loading, load, searchInput, openDetail,
     shouldBlur, reveal, openLightbox, closeLightbox, typeFilter, pageFirst, collapsed, typeCounts, visibleModels };

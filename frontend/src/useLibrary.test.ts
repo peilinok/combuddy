@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { nextTick } from "vue";
 vi.mock("./api", () => ({
+  fetchStats: vi.fn().mockResolvedValue({ scanning: false, scan: { phase: "idle" } }),
   fetchModels: vi.fn().mockResolvedValue({ models: [
     { id: 1, filename: "a.safetensors", label: "sdxl", ref_count: 2,
       civitai_found: 1, civitai_name: "Real", nsfw_level: 4, sha256: "x", has_preview: 1 }] }),

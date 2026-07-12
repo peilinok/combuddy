@@ -4,6 +4,12 @@ from combuddy import db, config, scan_service, stats
 def _st(p, header):
     blob = json.dumps(header).encode(); p.write_bytes(struct.pack("<Q", len(blob)) + blob)
 
+def test_run_scan_increments_revision(tmp_path):
+    conn = db.connect(str(tmp_path/"c.sqlite")); db.init_schema(conn)
+    assert scan_service.STATUS["revision"] == 0
+    scan_service.run_scan(conn)
+    assert scan_service.STATUS["revision"] == 1
+
 def test_run_scan_populates_everything(tmp_path):
     conn = db.connect(str(tmp_path/"c.sqlite")); db.init_schema(conn)
     mroot = tmp_path / "models"; (mroot/"checkpoints"/"SD1.5").mkdir(parents=True)
@@ -27,6 +33,7 @@ def test_single_flight(tmp_path, monkeypatch):
     scan_service.STATUS["running"] = True
     try:
         assert scan_service.run_scan(conn) == {"skipped": "already running"}
+        assert scan_service.STATUS["revision"] == 0
     finally:
         scan_service.STATUS["running"] = False
 
