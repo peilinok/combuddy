@@ -35,7 +35,7 @@ export default {
     refBy: "反向依赖 — 被 {n} 个 workflow 引用", noRef: "没有 workflow 引用它(可清理)",
   },
   card: { refCount: "引用 {n}" },
-  workflow: { title: "Workflow", hitMiss: "命中 {hit} · 缺失 {miss}", summary: "命中 {hit} · 歧义 {ambiguous} · 缺失 {miss}" },
+  workflow: { title: "Workflow", hitMiss: "命中 {hit} · 缺失 {miss}", amb: "歧义 {n}", summary: "命中 {hit} · 歧义 {ambiguous} · 缺失 {miss}" },
   cleanup: {
     title: "清理中心", unreferencedModels: "未被引用的模型", countUnused: "{n} 个 · 没有任何 workflow 使用它们",
     reclaimable: "可回收", selectedSummary: "已选 {n} 项 · {size} · 均 0 引用,可安全移除", moveToTrash: "移至回收站",

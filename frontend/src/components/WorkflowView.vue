@@ -19,7 +19,7 @@ const miss = computed(() => selected.value?.edges.filter((e: any) => e.status ==
           :class="['px-3 py-2 rounded text-sm cursor-pointer mb-1',
             selected?.id===w.id ? 'bg-surface-hover text-primary' : 'bg-surface-card text-color-secondary']">
           <div class="truncate">{{ w.filename }}</div>
-          <div class="text-[10px] text-color-secondary">{{ t("workflow.hitMiss", { hit: w.resolved, miss: w.missing }) }}</div>
+          <div class="text-[10px] text-color-secondary">{{ t("workflow.hitMiss", { hit: w.resolved, miss: w.missing }) }}<template v-if="w.ambiguous"> · {{ t("workflow.amb", { n: w.ambiguous }) }}</template></div>
         </div>
       </div>
       <div v-if="selected" class="flex-1">
