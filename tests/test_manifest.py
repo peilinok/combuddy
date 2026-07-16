@@ -219,3 +219,22 @@ def test_export_filename_header_is_sanitized(tmp_path):
     cd = _app(tmp_path).get(f"/api/workflows/{wf}/bundle").headers["content-disposition"]
     assert '"' not in cd.replace('filename="', "").replace('.combuddy.zip"', "")
     assert "\r" not in cd and "\n" not in cd
+
+
+def test_export_filename_header_handles_cjk(tmp_path):
+    # Starlette 用 latin-1 编码响应头:CJK 文件名若原样进 filename= 会 UnicodeEncodeError → 500。
+    # CLAUDE.md 把 CJK 文件名列为一等公民场景,必须导得出来。
+    c = _conn(tmp_path)
+    wr = _root(c, "/w", "workflow")
+    p = tmp_path / "cjk.json"
+    p.write_bytes(b"{}")
+    wf = _workflow(c, wr, str(p), "我的工作流.json", 0)
+    c.commit()
+    c.close()
+
+    r = _app(tmp_path).get(f"/api/workflows/{wf}/bundle")
+    assert r.status_code == 200
+    cd = r.headers["content-disposition"]
+    assert "filename*=UTF-8''" in cd        # RFC 5987 保留原名
+    assert "%E6%88%91" in cd                # "我" 的 percent-encoding
+    assert set(zipfile.ZipFile(io.BytesIO(r.content)).namelist()) == {"manifest.json", "workflow.json"}

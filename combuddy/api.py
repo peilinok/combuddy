@@ -1,4 +1,5 @@
 import os, re, threading, mimetypes
+from urllib.parse import quote
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -139,9 +140,14 @@ def create_app(db_path: str, static_dir: str | None = None, demo: bool = False,
             return JSONResponse({"reason": e.reason}, status_code=e.status)
         finally:
             c.close()
-        safe = re.sub(r'[^\w\-. ]', "_", stem)[:80] or "workflow"   # 防响应头注入 [L12]
+        # Starlette 用 latin-1 编码响应头,CJK 文件名原样进 filename= 会 UnicodeEncodeError → 500。
+        # filename= 收紧到 ASCII 安全子集兜底(顺带挡住引号/CRLF 注入 [L12]),
+        # filename*= 按 RFC 5987 传 UTF-8 原名,现代浏览器优先用它。
+        safe = re.sub(r"[^A-Za-z0-9\-. ]", "_", stem)[:80] or "workflow"
+        star = quote(f"{stem}.combuddy.zip", safe="")
         return Response(content=data, media_type="application/zip",
-                        headers={"Content-Disposition": f'attachment; filename="{safe}.combuddy.zip"'})
+                        headers={"Content-Disposition":
+                                 f"attachment; filename=\"{safe}.combuddy.zip\"; filename*=UTF-8''{star}"})
 
     @app.post("/api/cleanup/trash")
     def api_trash(body: dict):
