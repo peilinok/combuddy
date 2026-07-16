@@ -58,6 +58,25 @@ The single place combuddy talks to the network, gated by `online_enrich` (defaul
 ### Duplicate detection (live query, no schema)
 `queries.list_duplicate_groups` groups models by `sha256`, and for each member `os.stat`s its path for the inode — a member is *deletable* when it is unreferenced and shares no inode with the kept copy. **Keep** is 3-tier: a referenced copy wins, else the shallowest path, else `first_seen`. `reclaimable` dedups by inode (hardlinks counted once); if `os.stat` fails on any keep-candidate the whole group is skipped (never mis-deletes). `stats.duplicate_waste` + `GET /api/cleanup/duplicates` feed the Dashboard tile and CleanupView's Duplicates tab; deletion reuses the trash path. Pure query layer — zero schema change.
 
+### Workflow dependency manifest (`manifest.py`)
+`GET /api/workflows/{id}/bundle` zips the **verbatim** workflow file + a `manifest.json` built
+from one `edges ⋈ models ⋈ civitai` query (never `get_workflow_resolution` — it lacks
+sha256/rel_in_type/civitai). Each ref gets a **four-state `lock`**: `exact` (path-matched **and**
+hashed — the *only* state whose sha may drive a mismatch), `weak` (basename-matched, or matched
+but unhashed), `ambiguous` (source had multiple candidates), `expected` (source had none).
+`POST /api/manifest/verify` takes the zip as a **raw body** (`request.stream()` with a size cap —
+`UploadFile` would pull in `python-multipart`, and `request.body()` buffers before the cap) and
+returns four tiers: **present** (`confidence: exact|unverified` + `needs_hash`), **mismatch**,
+**ambiguous** (with candidates, never a single bound `model_id`), **missing**. The algorithm is
+sha-first (a full-table sha hit wins regardless of `lock`), then a **`dir_type`-scoped** candidate
+lookup (a bare `name_key` would cross-match `loras/foo` against `checkpoints/foo`), then: multiple
+candidates → ambiguous; single candidate → mismatch **only if** `lock=="exact"` and the local
+candidate **is itself hashed** (otherwise `present/unverified + needs_hash` — an unhashed importer
+must never be told everything is the wrong version). Bundles are untrusted input: manifest.json is
+read with a bounded `zf.open().read(MAX+1)` (`zipfile.read()` decompresses without limit), and
+`civitai.url` is dropped unless it is `https://civitai.com` (it lands in a clickable link).
+Zero schema change; `zipfile`/`io`/`json` are stdlib.
+
 ### Demo mode (`combuddy demo`)
 `combuddy/demo/seed.py::seed_demo(conn)` fills a **tempfile** SQLite DB with synthetic data (models across the dir_types, byte-identical sha256 dup groups, Civitai rows, workflows covering hit/ambiguous/missing) and `__main__` builds the app with `demo=True`. The `demo` flag threads `build_app → create_app`: `/api/stats` reports `demo`, `/api/scan` no-ops, `/api/preview` returns a bundled cover (deterministic `int(sha[:8],16) % 8`). **It never touches `~/.combuddy`, never scans, never hits the network.** Non-demo paths are byte-for-byte unchanged (the flag defaults False everywhere) — the discipline that keeps demo from leaking into real runs.
 

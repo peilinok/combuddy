@@ -83,6 +83,18 @@ Search and filter every indexed model. Open a model to see local metadata, optio
 
 Pick a workflow and inspect every referenced model. References are marked as resolved, ambiguous, or missing, so you can tell what a shared workflow needs before you run it.
 
+### Share a Workflow's Dependencies
+
+Export any workflow as a `.combuddy.zip` bundle — the original workflow plus a manifest of
+every model it references (content hash, folder type, relative path, Civitai identity when
+known). Send it along with your workflow; the recipient imports the bundle and gets an exact
+report: which models they already have (byte-identical), which are a *different version* of
+something they have, which are ambiguous locally, and which are missing outright. Missing
+entries link straight to Civitai when the source knew the model.
+
+Everything is local: the manifest is built from your own index, and verification is a local
+query. Nothing is uploaded.
+
 ### Cleanup and Duplicates
 
 Review models that no workflow references and move them to a recoverable trash instead of deleting them permanently. Duplicate detection groups exact byte-for-byte matches by SHA-256 and helps identify unreferenced copies that can be reclaimed safely.
