@@ -40,7 +40,7 @@ def _entry(r):
         "node_type": r["node_type"],
         "dir_type": r["ref_dir_type"],
         "lock": _lock_for(r["model_id"], r["match_kind"], r["sha256"]),
-        "filename": r["filename"] or os.path.basename(r["ref_string"]),
+        "filename": r["filename"] or os.path.basename(norm.normalize_path(r["ref_string"])),
     }
     if r["model_id"] is not None:
         e["match_kind"] = r["match_kind"]

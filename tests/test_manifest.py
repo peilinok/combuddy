@@ -121,3 +121,15 @@ def test_empty_workflow_yields_empty_models(tmp_path):
     m = manifest.build_manifest(c, _wf_row(c, wf))
     assert m["models"] == []
     assert m["generated_by"].startswith("combuddy ")
+
+
+def test_unbound_filename_falls_back_to_normalized_basename(tmp_path):
+    # 未绑定条目的 filename 取自 ref_string 的 basename;ref 里的反斜杠必须先归一化,
+    # 否则 POSIX 上 basename 会把整串 "SD1.5\\x.safetensors" 当成文件名
+    c = _conn(tmp_path)
+    wr = _root(c, "/w", "workflow")
+    wf = _workflow(c, wr, "/w/x.json", "x.json", 1)
+    _edge(c, wf, "SD1.5\\gone.safetensors", "LoraLoader", "loras", None, None)
+    c.commit()
+    e = manifest.build_manifest(c, _wf_row(c, wf))["models"][0]
+    assert e["filename"] == "gone.safetensors"
