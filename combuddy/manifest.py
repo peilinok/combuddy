@@ -210,7 +210,7 @@ def verify_bundle(conn, body):
         civ = entry.get("civitai")
         url = _safe_civitai_url(civ.get("url")) if isinstance(civ, dict) else None
         sha = entry.get("sha256")
-        sha = sha if isinstance(sha, str) and _SHA_RE.fullmatch(sha) else None
+        sha = sha.lower() if isinstance(sha, str) and _SHA_RE.fullmatch(sha) else None
 
         # 步骤 1:sha 正向命中。独立在前、if/elif 短路,不与 dir_type/name 条件 OR 进同一 SQL。
         # 本步不看 lock:「本地存在字节一致的文件」是客观事实;lock 只约束步骤 3 的负向判定 [H3]

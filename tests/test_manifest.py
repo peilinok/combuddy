@@ -589,3 +589,17 @@ def test_roundtrip_fully_hashed_workflow_is_all_exact(tmp_path):
     assert rep["summary"] == {"present_exact": 2, "present_unverified": 0, "mismatch": 0,
                               "ambiguous": 0, "missing": 0, "total": 2}
     assert rep["workflow"]["filename"] == "rt.json"
+
+
+def test_sha_comparison_is_case_insensitive(tmp_path):
+    # 本地 sha 恒小写(hexdigest);别的工具生成的 manifest 可能用大写 hex(合规 64-hex 格式)。
+    # 字节相同就是同一文件 → present(exact),绝不能因大小写判 mismatch [B2 同一类别]
+    c = _conn(tmp_path)
+    m = _model(c, _root(c, "/m"), "loras", "a.safetensors", sha256="a" * 64)   # 本地小写
+    c.commit()
+    rep = manifest.verify_bundle(c, _bundle_of([{
+        "ref_string": "a.safetensors", "filename": "a.safetensors", "dir_type": "loras",
+        "lock": "exact", "sha256": "A" * 64}]))                                  # manifest 大写
+    assert rep["summary"]["present_exact"] == 1
+    assert rep["summary"]["mismatch"] == 0
+    assert rep["present"][0]["model_id"] == m
