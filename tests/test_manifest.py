@@ -455,3 +455,14 @@ def test_candidates_deterministic_when_all_sort_keys_tie(tmp_path):
         c, {"ref_string": "SD1.5/foo.safetensors", "filename": "foo.safetensors",
             "dir_type": "checkpoints"})]
     assert ids == sorted([a, b])
+
+
+def test_candidates_non_str_filename_does_not_crash(tmp_path):
+    # filename 是攻击者可控字段,_read_manifest 只校验 ref_string 是 str。非 str 的
+    # filename 不能让 match_key 崩溃(会对非 str 调 .replace),应退回 ref 的 basename
+    c = _conn(tmp_path)
+    m = _model(c, _root(c, "/m"), "loras", "foo.safetensors", sha256="a" * 64)
+    c.commit()
+    rows = manifest._candidates(
+        c, {"ref_string": "foo.safetensors", "filename": 123, "dir_type": "loras"})
+    assert [r["id"] for r in rows] == [m]     # 退到 basename("foo.safetensors") → 命中

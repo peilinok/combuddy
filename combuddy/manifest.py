@@ -181,8 +181,12 @@ def _candidates(conn, entry):
       `= NULL` 恒 false,故用 Python 分支省略约束 [L11];
     - 其它非法值(空串 / 非 str,均属攻击者可控)→ 无候选,绝不当作「未指定」去跨类型匹配 [H1]。"""
     dt = entry.get("dir_type")
-    mk = norm.match_key(entry["ref_string"])
-    nk = norm.match_key(entry.get("filename") or os.path.basename(entry["ref_string"]))
+    ref = entry["ref_string"]
+    fn = entry.get("filename")
+    mk = norm.match_key(ref)
+    # filename 是攻击者可控字段,_read_manifest 不校验其类型;非 str 时退回 ref 的 basename,
+    # 不能把它原样喂给 match_key(会对非 str 调 .replace → AttributeError)
+    nk = norm.match_key(fn if isinstance(fn, str) and fn else os.path.basename(ref))
     if isinstance(dt, str) and dt:
         rows = conn.execute(
             f"SELECT m.* FROM models m WHERE m.dir_type=? AND m.match_key=? {_ORDER}",
