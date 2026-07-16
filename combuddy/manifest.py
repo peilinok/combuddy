@@ -146,3 +146,43 @@ def _read_manifest(body):
         if not isinstance(m, dict) or not isinstance(m.get("ref_string"), str):
             raise ManifestError("bad_json")
     return data
+
+
+_SHA_RE = re.compile(r"[0-9a-fA-F]{64}")
+
+# 多命中时裸 fetchone() 会让 SQLite 任意返回一行 → model_id 未定义、跨次不可复现。
+# 与 queries._pick_keep 同精神:被引用优先 → 路径最浅 → 字典序 → first_seen [H2]
+_ORDER = """ORDER BY (SELECT COUNT(*) FROM edges e WHERE e.model_id = m.id) DESC,
+                     (LENGTH(m.rel_path) - LENGTH(REPLACE(m.rel_path, '/', ''))) ASC,
+                     m.rel_path ASC, m.first_seen ASC"""
+
+
+def _safe_civitai_url(url):
+    """bundle 不可信:只放行 https://civitai.com,其余(含 javascript: / 仿冒域)丢弃 [B1]"""
+    if not isinstance(url, str) or not url:
+        return None
+    try:
+        p = urlparse(url)
+    except ValueError:
+        return None
+    return url if (p.scheme == "https" and p.hostname == "civitai.com") else None
+
+
+def _candidates(conn, entry):
+    """按 dir_type + match_key 找候选,空了才退同 dir_type 内的 name_key。
+    name_key 兜底绝不能丢 dir_type 约束,否则跨类型同名会假命中 [H1]。
+    dir_type 为 null 时用 Python 分支省略约束——`WHERE dir_type = ?` 传 None
+    是 `= NULL`,恒 false [L11]。"""
+    dt = entry.get("dir_type")
+    mk = norm.match_key(entry["ref_string"])
+    nk = norm.match_key(entry.get("filename") or os.path.basename(entry["ref_string"]))
+    if isinstance(dt, str) and dt:
+        rows = conn.execute(
+            f"SELECT m.* FROM models m WHERE m.dir_type=? AND m.match_key=? {_ORDER}",
+            (dt, mk)).fetchall()
+        return rows or conn.execute(
+            f"SELECT m.* FROM models m WHERE m.dir_type=? AND m.name_key=? {_ORDER}",
+            (dt, nk)).fetchall()
+    rows = conn.execute(f"SELECT m.* FROM models m WHERE m.match_key=? {_ORDER}", (mk,)).fetchall()
+    return rows or conn.execute(
+        f"SELECT m.* FROM models m WHERE m.name_key=? {_ORDER}", (nk,)).fetchall()

