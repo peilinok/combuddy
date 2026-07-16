@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import struct
 import time
 import zipfile
 
@@ -296,6 +297,33 @@ def test_read_manifest_rejects_zip_bomb():
     assert ei.value.reason == "too_large"
 
 
+def _zip_with_broken_local_header():
+    # 合法中央目录 + 损坏的 local file header:ZipFile() 构造只读末尾的中央目录,
+    # 要到 open() 才碰 local header,故这类包骗得过构造函数校验
+    body = bytearray(_zip_of(b'{"combuddy_manifest": 1, "models": []}'))
+    i = body.find(b"PK\x03\x04")
+    body[i:i + 4] = b"PK\x03\x05"
+    return bytes(body)
+
+
+def _zip_lying_about_size():
+    # 中央目录谎报 uncompressed size = 10,真实负载远大于它:骗过 file_size 的
+    # cheap 预检,逼代码必须靠有界读这个权威判据兜底
+    body = bytearray(_zip_of(b"A" * (manifest.MANIFEST_MAX + 1024)))
+    i = body.find(b"PK\x01\x02")                  # 中央目录第一条 = manifest.json
+    struct.pack_into("<I", body, i + 24, 10)      # 偏移 24 = uncompressed size
+    return bytes(body)
+
+
+@pytest.mark.parametrize("factory", [_zip_with_broken_local_header, _zip_lying_about_size])
+def test_read_manifest_rejects_valid_container_with_malicious_member(factory):
+    # 容器合法、成员恶意:必须以 ManifestError 干净拒绝,绝不冒泡成未捕获异常(→500)
+    with pytest.raises(manifest.ManifestError) as ei:
+        manifest._read_manifest(factory())
+    assert ei.value.reason in ("bad_zip", "too_large")   # 两者都是合规拒绝
+    assert ei.value.status == 400
+
+
 def test_read_manifest_rejects_too_many_models():
     body = _bundle_of([{"ref_string": f"m{i}.safetensors"} for i in range(manifest.MODELS_MAX + 1)])
     with pytest.raises(manifest.ManifestError) as ei:
@@ -304,7 +332,9 @@ def test_read_manifest_rejects_too_many_models():
 
 
 def test_read_manifest_rejects_deeply_nested_json():
-    # 超深嵌套会让 json.loads 抛 RecursionError → 必须归一化成 400,不能 500
+    # 超深嵌套必须以 400 拒绝且不崩/不 OOM。具体走哪条分支随 Python 版本而异
+    # (老版本 json.loads 抛 RecursionError;新版本能解析完,再被顶层 dict 校验拦下),
+    # 两条路径都归 bad_json —— 这里锁定的是「不冒泡成 500」这个结果
     body = _zip_of(b"[" * 100_000 + b"]" * 100_000)
     with pytest.raises(manifest.ManifestError) as ei:
         manifest._read_manifest(body)

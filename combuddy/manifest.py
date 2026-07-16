@@ -109,8 +109,13 @@ def _read_manifest(body):
         raise ManifestError("missing_manifest")
     if info.file_size > MANIFEST_MAX:
         raise ManifestError("too_large")       # cheap 提前拒绝:file_size 是攻击者元数据
-    with z.open("manifest.json") as fp:
-        raw = fp.read(MANIFEST_MAX + 1)        # 有界解压:权威判据 [H4]
+    try:
+        with z.open("manifest.json") as fp:
+            raw = fp.read(MANIFEST_MAX + 1)        # 有界解压:权威判据 [H4]
+    except (zipfile.BadZipFile, RuntimeError, NotImplementedError, OSError, EOFError):
+        # 合法容器 + 恶意成员:损坏的 local header、加密位、不支持的压缩方法、
+        # 谎报 file_size 导致的 CRC 失配 —— 一律归为坏包,绝不冒泡成 500
+        raise ManifestError("bad_zip")
     if len(raw) > MANIFEST_MAX:
         raise ManifestError("too_large")
     try:
