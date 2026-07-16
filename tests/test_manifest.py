@@ -387,6 +387,9 @@ def test_read_manifest_rejects_deeply_nested_json():
     ("JavaScript:alert(1)", False),
     ("data:text/html,<script>alert(1)</script>", False),
     ("", False), (None, False), (123, False), ({"u": "x"}, False),
+    ("https://evil.tld\\@civitai.com/", False),   # 反斜杠权威混淆:浏览器导航到 evil.tld [Critical]
+    ("https://civitai.com\tx", False),             # 含 tab 等控制字符一律拒(解析分歧输入面)
+    ("https://civitai.com\n", False),              # 含换行一律拒
 ])
 def test_safe_civitai_url(url, ok):
     # bundle 来自他人,civitai.url 完全可控;前端会把它渲染成用户被诱导点击的链接 [B1]
@@ -430,3 +433,25 @@ def test_candidates_multi_root_same_relpath_returns_all_in_stable_order(tmp_path
     ids = [r["id"] for r in manifest._candidates(c, entry)]
     assert sorted(ids) == sorted([m1, m2])
     assert ids == [r["id"] for r in manifest._candidates(c, entry)]   # 确定性:两次同序 [H2]
+
+
+def test_candidates_empty_dir_type_does_not_cross_match(tmp_path):
+    # 攻击者写 "dir_type": "" 想绕过类型约束,不能被当作"未指定"去跨类型兜底 [H1]
+    c = _conn(tmp_path)
+    _model(c, _root(c, "/m"), "loras", "foo.safetensors", sha256="b" * 64)
+    c.commit()
+    assert manifest._candidates(
+        c, {"ref_string": "foo.safetensors", "filename": "foo.safetensors", "dir_type": ""}) == []
+
+
+def test_candidates_deterministic_when_all_sort_keys_tie(tmp_path):
+    # rel_path 相同、ref_count 都 0、first_seen 都相等 → 唯一确定性来自 m.id 兜底 [H2]
+    c = _conn(tmp_path)
+    a = _model(c, _root(c, "/m1"), "checkpoints", "SD1.5/foo.safetensors", sha256="y" * 64)
+    b = _model(c, _root(c, "/m2"), "checkpoints", "SD1.5/foo.safetensors", sha256="z" * 64)
+    c.execute("UPDATE models SET first_seen=100.0")     # 全部排序维度打平
+    c.commit()
+    ids = [r["id"] for r in manifest._candidates(
+        c, {"ref_string": "SD1.5/foo.safetensors", "filename": "foo.safetensors",
+            "dir_type": "checkpoints"})]
+    assert ids == sorted([a, b])

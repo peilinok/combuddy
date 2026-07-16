@@ -154,12 +154,17 @@ _SHA_RE = re.compile(r"[0-9a-fA-F]{64}")
 # 与 queries._pick_keep 同精神:被引用优先 → 路径最浅 → 字典序 → first_seen [H2]
 _ORDER = """ORDER BY (SELECT COUNT(*) FROM edges e WHERE e.model_id = m.id) DESC,
                      (LENGTH(m.rel_path) - LENGTH(REPLACE(m.rel_path, '/', ''))) ASC,
-                     m.rel_path ASC, m.first_seen ASC"""
+                     m.rel_path ASC, m.first_seen ASC, m.id ASC"""
 
 
 def _safe_civitai_url(url):
     """bundle 不可信:只放行 https://civitai.com,其余(含 javascript: / 仿冒域)丢弃 [B1]"""
     if not isinstance(url, str) or not url:
+        return None
+    # 浏览器(WHATWG)对 http(s) 把 `\` 当 `/`、并在解析前 strip tab/LF/CR,而 urlparse 不会。
+    # 这类分歧能让 "https://evil.tld\@civitai.com/" 骗过 hostname 检查却导航到 evil.tld。
+    # 合法 civitai 链接不含反斜杠或控制字符,直接拒掉整个分歧输入面。
+    if "\\" in url or any(ord(c) < 0x20 or ord(c) == 0x7f for c in url):
         return None
     try:
         p = urlparse(url)
@@ -171,8 +176,10 @@ def _safe_civitai_url(url):
 def _candidates(conn, entry):
     """按 dir_type + match_key 找候选,空了才退同 dir_type 内的 name_key。
     name_key 兜底绝不能丢 dir_type 约束,否则跨类型同名会假命中 [H1]。
-    dir_type 为 null 时用 Python 分支省略约束——`WHERE dir_type = ?` 传 None
-    是 `= NULL`,恒 false [L11]。"""
+    - dir_type 已知(非空字符串)→ 加约束;
+    - dir_type 为 null(未指定)→ 裸 name_key 兜底;`WHERE dir_type=?` 传 None 是
+      `= NULL` 恒 false,故用 Python 分支省略约束 [L11];
+    - 其它非法值(空串 / 非 str,均属攻击者可控)→ 无候选,绝不当作「未指定」去跨类型匹配 [H1]。"""
     dt = entry.get("dir_type")
     mk = norm.match_key(entry["ref_string"])
     nk = norm.match_key(entry.get("filename") or os.path.basename(entry["ref_string"]))
@@ -183,6 +190,8 @@ def _candidates(conn, entry):
         return rows or conn.execute(
             f"SELECT m.* FROM models m WHERE m.dir_type=? AND m.name_key=? {_ORDER}",
             (dt, nk)).fetchall()
-    rows = conn.execute(f"SELECT m.* FROM models m WHERE m.match_key=? {_ORDER}", (mk,)).fetchall()
-    return rows or conn.execute(
-        f"SELECT m.* FROM models m WHERE m.name_key=? {_ORDER}", (nk,)).fetchall()
+    if dt is None:
+        rows = conn.execute(f"SELECT m.* FROM models m WHERE m.match_key=? {_ORDER}", (mk,)).fetchall()
+        return rows or conn.execute(
+            f"SELECT m.* FROM models m WHERE m.name_key=? {_ORDER}", (nk,)).fetchall()
+    return []
