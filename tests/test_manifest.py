@@ -639,3 +639,30 @@ def test_verify_endpoint_maps_errors_to_reason_codes(tmp_path):
     r = client.post("/api/manifest/verify",
                     content=_zip_of(json.dumps({"combuddy_manifest": 99, "models": []}).encode()))
     assert r.status_code == 400 and r.json()["reason"] == "unsupported_version"
+
+
+def test_verify_endpoint_streams_body_and_never_buffers(tmp_path, monkeypatch):
+    # H5 的机制回归防护:上面的终态测试对被禁止的 `await request.body()` 写法会产生
+    # 逐字节相同的结果,抓不住退化。这里把 Request.body 打成地雷 —— 端点一旦从
+    # request.stream() 退化成先缓冲后判,这个测试立刻变红。
+    import starlette.requests
+
+    async def _boom(self):
+        raise AssertionError("endpoint must use request.stream(), not request.body() [H5]")
+
+    monkeypatch.setattr(starlette.requests.Request, "body", _boom)
+    c = _conn(tmp_path)
+    mr, wr = _root(c, "/m"), _root(c, "/w", "workflow")
+    m1 = _model(c, mr, "checkpoints", "a.safetensors", sha256="a" * 64)
+    p = tmp_path / "rt.json"
+    p.write_bytes(b'{"nodes": []}')
+    wf = _workflow(c, wr, str(p), "rt.json", 1)
+    _edge(c, wf, "a.safetensors", "CheckpointLoaderSimple", "checkpoints", m1, "path")
+    c.commit()
+    c.close()
+
+    client = _app(tmp_path)
+    body = client.get(f"/api/workflows/{wf}/bundle").content
+    r = client.post("/api/manifest/verify", content=body)
+    assert r.status_code == 200                      # 走 stream 成功;若走 body() 则地雷会炸
+    assert r.json()["summary"]["present_exact"] == 1
