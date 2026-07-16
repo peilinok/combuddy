@@ -2,6 +2,7 @@ import os
 
 from combuddy import db, queries, stats
 from combuddy.demo import gen_previews, seed
+from combuddy.workflows import parse_workflow
 
 
 def _seeded(tmp_path):
@@ -101,3 +102,34 @@ def test_stats_smoke(tmp_path):
     assert s["model_count"] >= 30
     assert s["duplicate_waste"] > 0
     assert s["civitai_coverage"]["identified"] >= 20
+
+
+def test_workflow_files_are_real_and_parse_back_to_same_refs(tmp_path):
+    # 导出 bundle 要逐字节读 workflows.path 的原文件；demo 也必须有真文件 [H6]
+    conn = _seeded(tmp_path)
+    rows = conn.execute("SELECT id, path FROM workflows").fetchall()
+    assert rows
+    for r in rows:
+        assert os.path.isfile(r["path"])
+        refs, err = parse_workflow(r["path"])
+        assert err is None
+        parsed = {(x["ref_string"], x["node_type"]) for x in refs}
+        stored = {
+            (e["ref_string"], e["node_type"])
+            for e in conn.execute(
+                "SELECT ref_string, node_type FROM edges WHERE workflow_id=?", (r["id"],)
+            )
+        }
+        assert parsed == stored
+
+
+def test_edge_states_unchanged_by_real_files(tmp_path):
+    # edges 必须仍由 _WORKFLOWS 手工插入，不得改用 resolver 生成 [H6]
+    conn = _seeded(tmp_path)
+    counts = {
+        "hit": conn.execute("SELECT COUNT(*) c FROM edges WHERE model_id IS NOT NULL").fetchone()["c"],
+        "ambiguous": conn.execute("SELECT COUNT(*) c FROM edges WHERE match_kind='ambiguous'").fetchone()["c"],
+        "missing": conn.execute(
+            "SELECT COUNT(*) c FROM edges WHERE model_id IS NULL AND match_kind IS NULL").fetchone()["c"],
+    }
+    assert counts["hit"] > 0 and counts["ambiguous"] > 0 and counts["missing"] > 0

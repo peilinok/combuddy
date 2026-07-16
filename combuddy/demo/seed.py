@@ -34,7 +34,6 @@ import time
 from .. import norm
 
 ROOT_LABEL = "Demo-Shared"
-_WORKFLOW_ROOT_PATH = "/demo/ComfyUI/workflows"
 _PLACEHOLDER_BYTES = b"demo"
 
 # 40 models across the 8 dir_types ComfyUI actually uses on disk.
@@ -222,13 +221,21 @@ def _insert_civitai(conn: sqlite3.Connection, model_ids: dict) -> None:
         )
 
 
-def _insert_workflows(conn: sqlite3.Connection, wf_root_id: int, model_ids: dict) -> None:
+def _insert_workflows(conn: sqlite3.Connection, wf_root_id: int, model_ids: dict,
+                      tmp_wf_root: str) -> None:
     now = time.time()
     for filename, refs in _WORKFLOWS:
+        # 真实的最小 ui-graph:parse_workflow 能解析回同一批 refs,供 bundle 逐字节读取。
+        # edges 仍由下面的 kind 手工插入,不经 resolver [H6]
+        abs_path = os.path.join(tmp_wf_root, filename)
+        nodes = [{"type": node_type, "widgets_values": [ref_string]}
+                 for ref_string, node_type, _dir_type, _kind, _target in refs]
+        with open(abs_path, "w", encoding="utf-8") as f:
+            json.dump({"nodes": nodes}, f, ensure_ascii=False)
         wf_cur = conn.execute(
             """INSERT INTO workflows(root_id,path,filename,mtime,ref_count,last_scanned)
                VALUES(?,?,?,?,?,?)""",
-            (wf_root_id, f"{_WORKFLOW_ROOT_PATH}/{filename}", filename, now, len(refs), now),
+            (wf_root_id, abs_path, filename, now, len(refs), now),
         )
         workflow_id = wf_cur.lastrowid
         for ref_string, node_type, ref_dir_type, kind, target in refs:
@@ -249,15 +256,16 @@ def _insert_workflows(conn: sqlite3.Connection, wf_root_id: int, model_ids: dict
 def seed_demo(conn: sqlite3.Connection) -> None:
     """Populates conn (already init_schema'd) with the demo dataset."""
     tmp_root = tempfile.mkdtemp(prefix="combuddy-demo-models-")
+    tmp_wf_root = tempfile.mkdtemp(prefix="combuddy-demo-workflows-")
     root_id = conn.execute(
         "INSERT INTO roots(kind,path,label,source) VALUES('model',?,?,'demo')",
         (tmp_root, ROOT_LABEL),
     ).lastrowid
     wf_root_id = conn.execute(
         "INSERT INTO roots(kind,path,label,source) VALUES('workflow',?,?,'demo')",
-        (_WORKFLOW_ROOT_PATH, "Demo Workflows"),
+        (tmp_wf_root, "Demo Workflows"),
     ).lastrowid
     model_ids = _insert_models(conn, root_id, tmp_root)
     _insert_civitai(conn, model_ids)
-    _insert_workflows(conn, wf_root_id, model_ids)
+    _insert_workflows(conn, wf_root_id, model_ids, tmp_wf_root)
     conn.commit()
