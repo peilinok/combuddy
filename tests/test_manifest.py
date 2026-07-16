@@ -315,7 +315,21 @@ def _zip_lying_about_size():
     return bytes(body)
 
 
-@pytest.mark.parametrize("factory", [_zip_with_broken_local_header, _zip_lying_about_size])
+def _zip_with_corrupt_deflate_stream():
+    # 合法容器 + 合法 local header + 中段被翻转的 DEFLATE 流。DEFLATE 是 zip 默认压缩,
+    # 损坏时 zlib 抛 zlib.error —— 它不是 OSError/BadZipFile 的子类,白名单接不住
+    payload = json.dumps({"combuddy_manifest": 1,
+                          "models": [{"ref_string": f"m{i}.safetensors"} for i in range(300)]}).encode()
+    body = bytearray(_zip_of(payload))
+    i = body.find(b"PK\x03\x04")
+    start = i + 30 + len("manifest.json")      # local header 固定 30 字节 + 文件名(extra 为空)
+    for k in range(start + 30, start + 60):    # 翻转压缩流中段
+        body[k] ^= 0xFF
+    return bytes(body)
+
+
+@pytest.mark.parametrize("factory", [_zip_with_broken_local_header, _zip_lying_about_size,
+                                     _zip_with_corrupt_deflate_stream])
 def test_read_manifest_rejects_valid_container_with_malicious_member(factory):
     # 容器合法、成员恶意:必须以 ManifestError 干净拒绝,绝不冒泡成未捕获异常(→500)
     with pytest.raises(manifest.ManifestError) as ei:
@@ -332,9 +346,10 @@ def test_read_manifest_rejects_too_many_models():
 
 
 def test_read_manifest_rejects_deeply_nested_json():
-    # 超深嵌套必须以 400 拒绝且不崩/不 OOM。具体走哪条分支随 Python 版本而异
-    # (老版本 json.loads 抛 RecursionError;新版本能解析完,再被顶层 dict 校验拦下),
-    # 两条路径都归 bad_json —— 这里锁定的是「不冒泡成 500」这个结果
+    # 超深嵌套必须以 400 拒绝且不崩/不 OOM。本项目 .venv(CPython 3.12)上走的是
+    # json.loads 抛 RecursionError → 被 except (ValueError, RecursionError) 接住;
+    # 某些更新的解释器能解析完深层 list,则由顶层 isinstance(data, dict) 校验拦下。
+    # 两条路径都归 bad_json —— 这里锁定的是「不冒泡成 500」这个结果。
     body = _zip_of(b"[" * 100_000 + b"]" * 100_000)
     with pytest.raises(manifest.ManifestError) as ei:
         manifest._read_manifest(body)

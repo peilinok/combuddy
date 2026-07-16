@@ -112,9 +112,12 @@ def _read_manifest(body):
     try:
         with z.open("manifest.json") as fp:
             raw = fp.read(MANIFEST_MAX + 1)        # 有界解压:权威判据 [H4]
-    except (zipfile.BadZipFile, RuntimeError, NotImplementedError, OSError, EOFError):
-        # 合法容器 + 恶意成员:损坏的 local header、加密位、不支持的压缩方法、
-        # 谎报 file_size 导致的 CRC 失配 —— 一律归为坏包,绝不冒泡成 500
+    except Exception:
+        # 合法容器 + 恶意成员:损坏的 local header / 加密位 / 不支持的压缩方法 /
+        # 谎报 file_size 致 CRC 失配 / 损坏的 DEFLATE 流(zlib.error)或 LZMA 流
+        # (lzma.LZMAError)—— 后两者是裸 Exception 子类,接不住。枚举 stdlib 内部
+        # 异常类型的白名单已两轮被 PoC 绕过,故兜底:这个 try 只包两行 stdlib 调用、
+        # 不含本项目逻辑,不存在把编程错误误吞成 bad_zip 的风险。
         raise ManifestError("bad_zip")
     if len(raw) > MANIFEST_MAX:
         raise ManifestError("too_large")
