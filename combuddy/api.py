@@ -1,6 +1,6 @@
 import os, re, threading, mimetypes
 from urllib.parse import quote
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from . import db as dbm, config, stats, scan_service, queries, trash, detect, manifest
@@ -148,6 +148,24 @@ def create_app(db_path: str, static_dir: str | None = None, demo: bool = False,
         return Response(content=data, media_type="application/zip",
                         headers={"Content-Disposition":
                                  f"attachment; filename=\"{safe}.combuddy.zip\"; filename*=UTF-8''{star}"})
+
+    @app.post("/api/manifest/verify")
+    async def api_manifest_verify(request: Request):
+        # 不用 UploadFile:那会拉入 python-multipart 新依赖。
+        # 流式累加封顶,绝不 await request.body() 后再判大小 [H5]
+        size, chunks = 0, []
+        async for chunk in request.stream():
+            size += len(chunk)
+            if size > manifest.BODY_MAX:
+                return JSONResponse({"reason": "too_large"}, status_code=413)
+            chunks.append(chunk)
+        c = conn()
+        try:
+            return manifest.verify_bundle(c, b"".join(chunks))
+        except manifest.ManifestError as e:
+            return JSONResponse({"reason": e.reason}, status_code=e.status)
+        finally:
+            c.close()
 
     @app.post("/api/cleanup/trash")
     def api_trash(body: dict):

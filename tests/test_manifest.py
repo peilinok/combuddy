@@ -603,3 +603,39 @@ def test_sha_comparison_is_case_insensitive(tmp_path):
     assert rep["summary"]["present_exact"] == 1
     assert rep["summary"]["mismatch"] == 0
     assert rep["present"][0]["model_id"] == m
+
+
+def test_verify_endpoint_roundtrip(tmp_path):
+    c = _conn(tmp_path)
+    mr, wr = _root(c, "/m"), _root(c, "/w", "workflow")
+    m1 = _model(c, mr, "checkpoints", "a.safetensors", sha256="a" * 64)
+    p = tmp_path / "rt.json"
+    p.write_bytes(b'{"nodes": []}')
+    wf = _workflow(c, wr, str(p), "rt.json", 1)
+    _edge(c, wf, "a.safetensors", "CheckpointLoaderSimple", "checkpoints", m1, "path")
+    c.commit()
+    c.close()
+
+    client = _app(tmp_path)
+    body = client.get(f"/api/workflows/{wf}/bundle").content
+    r = client.post("/api/manifest/verify", content=body)
+    assert r.status_code == 200
+    assert r.json()["summary"]["present_exact"] == 1
+
+
+def test_verify_endpoint_rejects_oversized_body_before_buffering(tmp_path):
+    # request.body() 会先把整个体缓冲进内存再判大小 → 超大 body 先 OOM。
+    # 必须流式累加、读满前拒绝 [H5]
+    _conn(tmp_path).close()
+    r = _app(tmp_path).post("/api/manifest/verify", content=b"x" * (manifest.BODY_MAX + 1))
+    assert r.status_code == 413 and r.json()["reason"] == "too_large"
+
+
+def test_verify_endpoint_maps_errors_to_reason_codes(tmp_path):
+    _conn(tmp_path).close()
+    client = _app(tmp_path)
+    r = client.post("/api/manifest/verify", content=b"not a zip")
+    assert r.status_code == 400 and r.json()["reason"] == "bad_zip"
+    r = client.post("/api/manifest/verify",
+                    content=_zip_of(json.dumps({"combuddy_manifest": 99, "models": []}).encode()))
+    assert r.status_code == 400 and r.json()["reason"] == "unsupported_version"
