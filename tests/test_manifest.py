@@ -445,7 +445,10 @@ def test_candidates_empty_dir_type_does_not_cross_match(tmp_path):
 
 
 def test_candidates_deterministic_when_all_sort_keys_tie(tmp_path):
-    # rel_path 相同、ref_count 都 0、first_seen 都相等 → 唯一确定性来自 m.id 兜底 [H2]
+    # 全打平时 _candidates 返回全部候选且顺序稳定。注意:因 models.id≡rowid≡自然扫描序,
+    # 本测试无法区分 _ORDER 末列有无 m.id ASC(删掉仍绿)——该兜底列的回归改由下面两个
+    # 测试共同锁定:first_seen 层由 test_candidates_first_seen_breaks_tie_before_rowid,
+    # 最末 m.id 层由 test_order_ends_with_id_tiebreak(结构断言) [H2]
     c = _conn(tmp_path)
     a = _model(c, _root(c, "/m1"), "checkpoints", "SD1.5/foo.safetensors", sha256="y" * 64)
     b = _model(c, _root(c, "/m2"), "checkpoints", "SD1.5/foo.safetensors", sha256="z" * 64)
@@ -457,6 +460,29 @@ def test_candidates_deterministic_when_all_sort_keys_tie(tmp_path):
     assert ids == sorted([a, b])
 
 
+def test_candidates_first_seen_breaks_tie_before_rowid(tmp_path):
+    # 行为锁定 [H2] 的 first_seen ASC 层:构造 id 序与 first_seen 序故意相反(先插的 a
+    # id 更小但 first_seen 更晚),断言按 first_seen 升序返回 [b, a] 而非 rowid 序 [a, b]。
+    # 删掉 _ORDER 的 first_seen ASC 会退化成自然 rowid 序 → 断言变红,守住这一层兜底。
+    c = _conn(tmp_path)
+    a = _model(c, _root(c, "/m1"), "checkpoints", "SD1.5/foo.safetensors", sha256="y" * 64)
+    b = _model(c, _root(c, "/m2"), "checkpoints", "SD1.5/foo.safetensors", sha256="z" * 64)
+    c.execute("UPDATE models SET first_seen=200.0 WHERE id=?", (a,))   # 先插,但更晚见到
+    c.execute("UPDATE models SET first_seen=100.0 WHERE id=?", (b,))   # 后插,但更早见到
+    c.commit()
+    ids = [r["id"] for r in manifest._candidates(
+        c, {"ref_string": "SD1.5/foo.safetensors", "filename": "foo.safetensors",
+            "dir_type": "checkpoints"})]
+    assert ids == [b, a]
+
+
+def test_order_ends_with_id_tiebreak():
+    # 最末的 m.id ASC 是 first_seen 也打平时的唯一仲裁,但因 id≡rowid≡自然扫描序,输出
+    # 断言无法区分它在不在(见上面测试的注释)。故用结构断言钉死:_ORDER 必须以 m.id ASC
+    # 收尾。注意 `"m.id" in _ORDER` 无效——开头 ref_count 子查询已含 m.id,恒真 [H2]
+    assert manifest._ORDER.rstrip().endswith("m.id ASC")
+
+
 def test_candidates_non_str_filename_does_not_crash(tmp_path):
     # filename 是攻击者可控字段,_read_manifest 只校验 ref_string 是 str。非 str 的
     # filename 不能让 match_key 崩溃(会对非 str 调 .replace),应退回 ref 的 basename
@@ -466,6 +492,18 @@ def test_candidates_non_str_filename_does_not_crash(tmp_path):
     rows = manifest._candidates(
         c, {"ref_string": "foo.safetensors", "filename": 123, "dir_type": "loras"})
     assert [r["id"] for r in rows] == [m]     # 退到 basename("foo.safetensors") → 命中
+
+
+def test_candidates_backslash_ref_missing_filename_matches_by_name(tmp_path):
+    # name_key 兜底取 basename 前必须先归一化反斜杠(与 _entry 第 56 行一致)。外来 manifest
+    # 用 Windows 风格 ref 且缺 filename 时,POSIX 的 os.path.basename 不切 `\`;若不先归一化
+    # 就把整串当 basename → 漏掉本地同名模型、把 present 误报成 missing [审查]
+    c = _conn(tmp_path)
+    m = _model(c, _root(c, "/m"), "loras", "foo.safetensors", sha256="a" * 64)
+    c.commit()
+    rows = manifest._candidates(
+        c, {"ref_string": "SD1.5\\foo.safetensors", "dir_type": "loras"})   # 无 filename 字段
+    assert [r["id"] for r in rows] == [m]     # 归一化后 basename=foo.safetensors → 命中
 
 
 def test_unhashed_local_never_mismatches(tmp_path):
@@ -666,3 +704,26 @@ def test_verify_endpoint_streams_body_and_never_buffers(tmp_path, monkeypatch):
     r = client.post("/api/manifest/verify", content=body)
     assert r.status_code == 200                      # 走 stream 成功;若走 body() 则地雷会炸
     assert r.json()["summary"]["present_exact"] == 1
+
+
+def test_verify_non_dict_civitai_does_not_crash(tmp_path):
+    # civitai 是攻击者可控字段,_read_manifest 不校验其类型。非 dict(如字符串)不能让
+    # verify_bundle 崩溃——isinstance(civ, dict) 守卫应吞掉它,civitai_url 归 None [B1]
+    c = _conn(tmp_path)
+    c.commit()
+    rep = manifest.verify_bundle(c, _bundle_of([{
+        "ref_string": "a.safetensors", "dir_type": "checkpoints",
+        "lock": "expected", "civitai": "pwned"}]))
+    assert rep["summary"]["missing"] == 1
+    assert rep["missing"][0]["civitai_url"] is None
+
+
+def test_verify_non_str_dir_type_does_not_cross_match(tmp_path):
+    # dir_type 攻击者可控且不校验类型。非 str/非 None(如 int)不能崩溃,也绝不当作「未指定」
+    # 去跨类型裸 name_key 匹配——_candidates 对这类值走 return [] → 归 missing [H1]
+    c = _conn(tmp_path)
+    _model(c, _root(c, "/m"), "loras", "foo.safetensors", sha256="a" * 64)
+    c.commit()
+    rep = manifest.verify_bundle(c, _bundle_of([{
+        "ref_string": "foo.safetensors", "dir_type": 123, "lock": "expected"}]))
+    assert rep["summary"]["missing"] == 1     # 无候选,绝不跨类型命中 loras/foo

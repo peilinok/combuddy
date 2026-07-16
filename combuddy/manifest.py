@@ -185,8 +185,9 @@ def _candidates(conn, entry):
     fn = entry.get("filename")
     mk = norm.match_key(ref)
     # filename 是攻击者可控字段,_read_manifest 不校验其类型;非 str 时退回 ref 的 basename,
-    # 不能把它原样喂给 match_key(会对非 str 调 .replace → AttributeError)
-    nk = norm.match_key(fn if isinstance(fn, str) and fn else os.path.basename(ref))
+    # 不能把它原样喂给 match_key(会对非 str 调 .replace → AttributeError)。取 basename 前先
+    # normalize_path(与 _entry 一致):否则 POSIX 的 os.path.basename 不切反斜杠,Windows 风格 ref 漏配
+    nk = norm.match_key(fn if isinstance(fn, str) and fn else os.path.basename(norm.normalize_path(ref)))
     if isinstance(dt, str) and dt:
         rows = conn.execute(
             f"SELECT m.* FROM models m WHERE m.dir_type=? AND m.match_key=? {_ORDER}",
