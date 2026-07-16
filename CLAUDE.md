@@ -59,7 +59,7 @@ The single place combuddy talks to the network, gated by `online_enrich` (defaul
 `queries.list_duplicate_groups` groups models by `sha256`, and for each member `os.stat`s its path for the inode — a member is *deletable* when it is unreferenced and shares no inode with the kept copy. **Keep** is 3-tier: a referenced copy wins, else the shallowest path, else `first_seen`. `reclaimable` dedups by inode (hardlinks counted once); if `os.stat` fails on any keep-candidate the whole group is skipped (never mis-deletes). `stats.duplicate_waste` + `GET /api/cleanup/duplicates` feed the Dashboard tile and CleanupView's Duplicates tab; deletion reuses the trash path. Pure query layer — zero schema change.
 
 ### Workflow dependency manifest (`manifest.py`)
-`GET /api/workflows/{id}/bundle` zips the **verbatim** workflow file + a `manifest.json` built
+`GET /api/workflows/{workflow_id}/bundle` zips the **verbatim** workflow file + a `manifest.json` built
 from one `edges ⋈ models ⋈ civitai` query (never `get_workflow_resolution` — it lacks
 sha256/rel_in_type/civitai). Each ref gets a **four-state `lock`**: `exact` (path-matched **and**
 hashed — the *only* state whose sha may drive a mismatch), `weak` (basename-matched, or matched

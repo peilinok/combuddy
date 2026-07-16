@@ -88,7 +88,7 @@ Pick a workflow and inspect every referenced model. References are marked as res
 Export any workflow as a `.combuddy.zip` bundle — the original workflow plus a manifest of
 every model it references (content hash, folder type, relative path, Civitai identity when
 known). Send it along with your workflow; the recipient imports the bundle and gets an exact
-report: which models they already have (byte-identical), which are a *different version* of
+report: which models they already have — **content-verified by hash, or matched by name/path but not yet content-verified** — which are a *different version* of
 something they have, which are ambiguous locally, and which are missing outright. Missing
 entries link straight to Civitai when the source knew the model.
 
