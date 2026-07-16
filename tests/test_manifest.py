@@ -133,3 +133,38 @@ def test_unbound_filename_falls_back_to_normalized_basename(tmp_path):
     c.commit()
     e = manifest.build_manifest(c, _wf_row(c, wf))["models"][0]
     assert e["filename"] == "gone.safetensors"
+
+
+def test_bundle_has_both_files_and_verbatim_workflow(tmp_path):
+    c = _conn(tmp_path)
+    wr = _root(c, "/w", "workflow")
+    p = tmp_path / "x.json"
+    raw = '{"nodes": [], "note": "保留原字节"}'.encode("utf-8")
+    p.write_bytes(raw)
+    wf = _workflow(c, wr, str(p), "x.json", 0)
+    c.commit()
+
+    data, stem = manifest.build_bundle(c, wf)
+    z = zipfile.ZipFile(io.BytesIO(data))
+    assert set(z.namelist()) == {"manifest.json", "workflow.json"}
+    assert z.read("workflow.json") == raw          # 逐字节复制,不重建
+    assert stem == "x"
+    assert json.loads(z.read("manifest.json"))["workflow"]["filename"] == "x.json"
+
+
+def test_bundle_not_found(tmp_path):
+    c = _conn(tmp_path)
+    with pytest.raises(manifest.ManifestError) as ei:
+        manifest.build_bundle(c, 999)
+    assert (ei.value.reason, ei.value.status) == ("not_found", 404)
+
+
+def test_bundle_source_missing(tmp_path):
+    # 扫描后原文件被删/移:必须 409 明确拒绝,不得静默产出残缺 bundle [M7]
+    c = _conn(tmp_path)
+    wr = _root(c, "/w", "workflow")
+    wf = _workflow(c, wr, str(tmp_path / "gone.json"), "gone.json", 0)
+    c.commit()
+    with pytest.raises(manifest.ManifestError) as ei:
+        manifest.build_bundle(c, wf)
+    assert (ei.value.reason, ei.value.status) == ("source_missing", 409)

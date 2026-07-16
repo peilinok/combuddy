@@ -10,6 +10,16 @@ from . import __version__, norm
 
 MANIFEST_VERSION = 1
 
+
+class ManifestError(Exception):
+    """业务错误 → HTTP。reason 是稳定机器码,前端据此做 i18n 映射 [M9]"""
+
+    def __init__(self, reason: str, status: int = 400):
+        super().__init__(reason)
+        self.reason = reason
+        self.status = status
+
+
 # 一条 JOIN 取全 manifest 所需列:get_workflow_resolution 不 SELECT sha256/
 # ref_dir_type/rel_in_type/size/base_arch/civitai 任一列,复用它只会逼出 N+1 [M4]
 _EDGE_SQL = """
@@ -65,3 +75,20 @@ def build_manifest(conn, wf):
         "workflow": {"filename": wf["filename"], "ref_count": wf["ref_count"]},
         "models": [_entry(r) for r in conn.execute(_EDGE_SQL, (wf["id"],))],
     }
+
+
+def build_bundle(conn, workflow_id):
+    wf = conn.execute("SELECT * FROM workflows WHERE id=?", (workflow_id,)).fetchone()
+    if wf is None:
+        raise ManifestError("not_found", 404)
+    try:
+        with open(wf["path"], "rb") as f:
+            wf_bytes = f.read()
+    except OSError:
+        raise ManifestError("source_missing", 409)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("manifest.json",
+                   json.dumps(build_manifest(conn, wf), ensure_ascii=False, indent=2))
+        z.writestr("workflow.json", wf_bytes)
+    return buf.getvalue(), os.path.splitext(wf["filename"])[0]
