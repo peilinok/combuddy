@@ -32,6 +32,7 @@ export async function exportBundle(workflowId: number, filename: string) {
 }
 
 export async function verifyBundle(file: File) {
+  report.value = null;   // 开始新核对:先清旧报告,否则失败/too_large 时旧报告会与新错误横幅同屏 [审查]
   if (file.size > BODY_MAX) { error.value = "too_large"; return; }   // 本地预检,不白传 [M10]
   verifying.value = true;
   try {

@@ -11,7 +11,10 @@ const { report, error: mError, verifying, exportBundle, verifyBundle } = useMani
 const { isDesktop, openExternal } = useDesktop();
 const fileInput = ref<HTMLInputElement | null>(null);
 let active = true;
+// 切换选中的 workflow 时清掉上次导出/核对残留的瞬态错误横幅(report 按 [H8] 保留跨导航) [审查]
+function pick(id: number) { mError.value = null; select(id); }
 onMounted(async () => {
+  mError.value = null;                    // 进入/重挂载视图时同样重置瞬态错误
   const pw = pendingWorkflowId.value;
   pendingWorkflowId.value = null;
   await load();
@@ -56,7 +59,7 @@ async function onFile(e: Event) {
         missing: report.summary.missing }) }}</div>
       <div v-if="!report.summary.total" class="text-color-secondary text-sm">{{ t("manifest.empty") }}</div>
 
-      <div v-for="it in report.present" :key="'p' + it.ref_string" class="flex items-center gap-2 text-sm py-1">
+      <div v-for="(it, i) in report.present" :key="'p' + i + it.ref_string" class="flex items-center gap-2 text-sm py-1">
         <span :class="['text-[11px] px-1.5 py-0.5 rounded shrink-0',
           it.confidence === 'exact' ? 'bg-primary/15 text-primary' : 'bg-yellow-500/15 text-yellow-500']">
           {{ t("manifest.cf_" + it.confidence) }}</span>
@@ -65,7 +68,7 @@ async function onFile(e: Event) {
         <span @click="goModel(it.model_id)" class="text-primary text-xs shrink-0 cursor-pointer hover:underline">{{ t("workflow.viewModel") }}</span>
       </div>
 
-      <div v-for="it in report.mismatch" :key="'x' + it.ref_string" class="flex items-center gap-2 text-sm py-1">
+      <div v-for="(it, i) in report.mismatch" :key="'x' + i + it.ref_string" class="flex items-center gap-2 text-sm py-1">
         <span class="text-[11px] px-1.5 py-0.5 rounded shrink-0 bg-orange-400/15 text-orange-400">{{ t("manifest.g_mismatch") }}</span>
         <span class="text-color truncate flex-1">{{ it.ref_string }}</span>
         <a v-if="it.civitai_url" :href="it.civitai_url" target="_blank"
@@ -74,7 +77,7 @@ async function onFile(e: Event) {
         <span @click="goModel(it.model_id)" class="text-primary text-xs shrink-0 cursor-pointer hover:underline">{{ t("workflow.viewModel") }}</span>
       </div>
 
-      <div v-for="it in report.ambiguous" :key="'a' + it.ref_string" class="text-sm py-1">
+      <div v-for="(it, i) in report.ambiguous" :key="'a' + i + it.ref_string" class="text-sm py-1">
         <div class="flex items-center gap-2">
           <span class="text-[11px] px-1.5 py-0.5 rounded shrink-0 bg-yellow-500/15 text-yellow-500">{{ t("manifest.g_ambiguous") }}</span>
           <span class="text-color truncate flex-1">{{ it.ref_string }}</span>
@@ -84,7 +87,7 @@ async function onFile(e: Event) {
           class="text-color-secondary text-xs pl-6 cursor-pointer hover:text-primary truncate">· {{ cd.rel_path }}</div>
       </div>
 
-      <div v-for="it in report.missing" :key="'m' + it.ref_string" class="flex items-center gap-2 text-sm py-1">
+      <div v-for="(it, i) in report.missing" :key="'m' + i + it.ref_string" class="flex items-center gap-2 text-sm py-1">
         <span class="text-[11px] px-1.5 py-0.5 rounded shrink-0 bg-orange-400/15 text-orange-400">{{ t("manifest.g_missing") }}</span>
         <span class="text-color truncate flex-1">{{ it.ref_string }}</span>
         <a v-if="it.civitai_url" :href="it.civitai_url" target="_blank"
@@ -102,7 +105,7 @@ async function onFile(e: Event) {
           </button>
           <input ref="fileInput" type="file" accept=".zip" class="hidden" @change="onFile" />
         </div>
-        <div v-for="w in workflows" :key="w.id" @click="select(w.id)"
+        <div v-for="w in workflows" :key="w.id" @click="pick(w.id)"
           :class="['px-3 py-2 rounded text-sm cursor-pointer mb-1',
             selected?.id===w.id ? 'bg-surface-hover text-primary' : 'bg-surface-card text-color-secondary']">
           <div class="truncate">{{ w.filename }}</div>

@@ -80,4 +80,21 @@ describe("useManifest", () => {
     expect(verifyManifest).not.toHaveBeenCalled();
     expect(error.value).toBe("too_large");
   });
+
+  it("verifyBundle clears a stale report when the new verify fails", async () => {
+    report.value = { summary: { total: 5 } } as any;   // 上一次成功核对残留的旧报告
+    (verifyManifest as any).mockRejectedValue(apiError(400, "bad_zip"));
+    await verifyBundle(new File(["z"], "b.zip"));
+    expect(error.value).toBe("bad_zip");
+    expect(report.value).toBe(null);                   // 旧报告必须清掉,不能与错误横幅同屏 [审查]
+  });
+
+  it("verifyBundle clears a stale report when the file is oversized", async () => {
+    report.value = { summary: { total: 5 } } as any;
+    const big = new File(["z"], "big.zip");
+    Object.defineProperty(big, "size", { value: BODY_MAX + 1 });
+    await verifyBundle(big);
+    expect(error.value).toBe("too_large");
+    expect(report.value).toBe(null);
+  });
 });
