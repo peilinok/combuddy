@@ -1,6 +1,7 @@
 import os, re, threading, mimetypes
 from urllib.parse import quote
 from fastapi import FastAPI, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from . import db as dbm, config, stats, scan_service, queries, trash, detect, manifest
@@ -161,7 +162,9 @@ def create_app(db_path: str, static_dir: str | None = None, demo: bool = False,
             chunks.append(chunk)
         c = conn()
         try:
-            return manifest.verify_bundle(c, b"".join(chunks))
+            # verify_bundle 同步且含多次 SQLite 查询(sha256 无索引 → 全表扫描),在唯一的 async
+            # 端点里内联跑会阻塞事件循环;卸载到线程池,避免大 manifest 拖垮 /api/stats 等并发请求 [审查]
+            return await run_in_threadpool(manifest.verify_bundle, c, b"".join(chunks))
         except manifest.ManifestError as e:
             return JSONResponse({"reason": e.reason}, status_code=e.status)
         finally:
