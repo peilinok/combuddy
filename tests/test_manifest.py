@@ -328,8 +328,28 @@ def _zip_with_corrupt_deflate_stream():
     return bytes(body)
 
 
+def _zip_with_bad_utf8_filename():
+    # 中央目录条目设了 UTF-8 文件名标志(0x0800)但文件名字节非法 →
+    # ZipFile() 构造时 filename.decode('utf-8') 抛 UnicodeDecodeError
+    body = bytearray(_zip_of(b'{"combuddy_manifest": 1, "models": []}'))
+    i = body.find(b"PK\x01\x02")                  # 中央目录首条
+    struct.pack_into("<H", body, i + 8, 0x0800)   # 偏移 8 = general purpose flag
+    body[i + 46] = 0xFF                            # 偏移 46 = 文件名首字节
+    return bytes(body)
+
+
+def _zip_with_unsupported_version():
+    # 中央目录条目的 "version needed to extract" = 99(> MAX_EXTRACT_VERSION=63)
+    # → ZipFile() 构造时抛 NotImplementedError
+    body = bytearray(_zip_of(b'{"combuddy_manifest": 1, "models": []}'))
+    i = body.find(b"PK\x01\x02")
+    struct.pack_into("<H", body, i + 6, 99)       # 偏移 6 = version needed
+    return bytes(body)
+
+
 @pytest.mark.parametrize("factory", [_zip_with_broken_local_header, _zip_lying_about_size,
-                                     _zip_with_corrupt_deflate_stream])
+                                     _zip_with_corrupt_deflate_stream, _zip_with_bad_utf8_filename,
+                                     _zip_with_unsupported_version])
 def test_read_manifest_rejects_valid_container_with_malicious_member(factory):
     # 容器合法、成员恶意:必须以 ManifestError 干净拒绝,绝不冒泡成未捕获异常(→500)
     with pytest.raises(manifest.ManifestError) as ei:

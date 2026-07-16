@@ -101,7 +101,11 @@ def _read_manifest(body):
     """解析不可信 bundle。只按固定名读进内存、从不解包落盘 → zip-slip 不适用。"""
     try:
         z = zipfile.ZipFile(io.BytesIO(body))
-    except (zipfile.BadZipFile, OSError):
+    except Exception:
+        # ZipFile() 会解析整个中央目录(不止 manifest.json 那条),能抛的裸异常远不止
+        # BadZipFile/OSError:UTF-8 标志位配非法文件名字节 → UnicodeDecodeError,
+        # version-needed 超 MAX_EXTRACT_VERSION → NotImplementedError。理由同下方
+        # 解压处:单行纯 stdlib 调用、不含本项目逻辑,故兜底而非维护必然遗漏的白名单。
         raise ManifestError("bad_zip")
     try:
         info = z.getinfo("manifest.json")
@@ -119,6 +123,8 @@ def _read_manifest(body):
         # 异常类型的白名单已两轮被 PoC 绕过,故兜底:这个 try 只包两行 stdlib 调用、
         # 不含本项目逻辑,不存在把编程错误误吞成 bad_zip 的风险。
         raise ManifestError("bad_zip")
+    # 防御性冗余:ZipExtFile 按声明的 file_size 硬截断输出,故上面的 cheap 检查通过后
+    # 这里理论不可达(谎报小 size 的包会先撞 CRC 失配 → bad_zip)。保留以防实现变化。
     if len(raw) > MANIFEST_MAX:
         raise ManifestError("too_large")
     try:
