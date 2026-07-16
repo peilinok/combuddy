@@ -466,3 +466,126 @@ def test_candidates_non_str_filename_does_not_crash(tmp_path):
     rows = manifest._candidates(
         c, {"ref_string": "foo.safetensors", "filename": 123, "dir_type": "loras"})
     assert [r["id"] for r in rows] == [m]     # 退到 basename("foo.safetensors") → 命中
+
+
+def test_unhashed_local_never_mismatches(tmp_path):
+    # 导入方 auto_hash 关闭或 hashing 未跑完时本地 sha 全 NULL。若只查「同名存在」
+    # 就报 mismatch,一个字节完全一致的库会整片报「版本不符」——这是 Blocker [B2]
+    c = _conn(tmp_path)
+    _model(c, _root(c, "/m"), "checkpoints", "a.safetensors", sha256=None)
+    c.commit()
+    rep = manifest.verify_bundle(c, _bundle_of([{
+        "ref_string": "a.safetensors", "filename": "a.safetensors",
+        "dir_type": "checkpoints", "lock": "exact", "sha256": "a" * 64}]))
+    assert rep["mismatch"] == []
+    assert rep["summary"]["present_unverified"] == 1
+    assert rep["present"][0]["needs_hash"] is True
+
+
+def test_mismatch_only_when_local_is_hashed_and_differs(tmp_path):
+    c = _conn(tmp_path)
+    m = _model(c, _root(c, "/m"), "checkpoints", "a.safetensors", sha256="b" * 64)
+    c.commit()
+    rep = manifest.verify_bundle(c, _bundle_of([{
+        "ref_string": "a.safetensors", "filename": "a.safetensors",
+        "dir_type": "checkpoints", "lock": "exact", "sha256": "a" * 64,
+        "civitai": {"url": "https://civitai.com/models/9"}}]))
+    assert rep["summary"]["mismatch"] == 1
+    assert rep["mismatch"][0]["model_id"] == m
+    assert rep["mismatch"][0]["civitai_url"] == "https://civitai.com/models/9"
+
+
+def test_sha_hit_wins_over_same_name_different_sha(tmp_path):
+    # 本地既有 sha 一致的副本(异路径)、又有同名不同 sha 的 → present(exact),绝不 mismatch
+    c = _conn(tmp_path)
+    mr = _root(c, "/m")
+    hit = _model(c, mr, "checkpoints", "other/a.safetensors", sha256="a" * 64)
+    _model(c, mr, "checkpoints", "a.safetensors", sha256="b" * 64)
+    c.commit()
+    rep = manifest.verify_bundle(c, _bundle_of([{
+        "ref_string": "a.safetensors", "filename": "a.safetensors",
+        "dir_type": "checkpoints", "lock": "exact", "sha256": "a" * 64}]))
+    assert rep["summary"] == {"present_exact": 1, "present_unverified": 0, "mismatch": 0,
+                              "ambiguous": 0, "missing": 0, "total": 1}
+    assert rep["present"][0]["model_id"] == hit
+
+
+def test_weak_never_mismatches(tmp_path):
+    # lock != exact 的 sha 可能 pin 的是源侧误命中的模型,不得驱动 mismatch [H3][L3]
+    c = _conn(tmp_path)
+    _model(c, _root(c, "/m"), "loras", "c.safetensors", sha256="d" * 64)
+    c.commit()
+    rep = manifest.verify_bundle(c, _bundle_of([{
+        "ref_string": "c.safetensors", "filename": "c.safetensors", "dir_type": "loras",
+        "lock": "weak", "match_kind": "basename", "sha256": "c" * 64}]))
+    assert rep["mismatch"] == []
+    assert rep["present"][0]["confidence"] == "unverified"
+    assert "needs_hash" not in rep["present"][0]
+
+
+def test_multiple_candidates_yield_ambiguous_without_model_id(tmp_path):
+    # 多 root / 同名多副本是 combuddy 常态;契约是「多命中永不绑定」[H2]
+    c = _conn(tmp_path)
+    _model(c, _root(c, "/m1"), "checkpoints", "SD1.5/foo.safetensors", sha256="y" * 64)
+    _model(c, _root(c, "/m2"), "checkpoints", "SD1.5/foo.safetensors", sha256="z" * 64)
+    c.commit()
+    rep = manifest.verify_bundle(c, _bundle_of([{
+        "ref_string": "SD1.5/foo.safetensors", "filename": "foo.safetensors",
+        "dir_type": "checkpoints", "lock": "weak"}]))
+    assert rep["summary"]["ambiguous"] == 1
+    item = rep["ambiguous"][0]
+    assert "model_id" not in item
+    assert len(item["candidates"]) == 2
+    assert {x["sha256"] for x in item["candidates"]} == {"y" * 64, "z" * 64}
+
+
+def test_missing_and_cross_dir_type_is_missing(tmp_path):
+    # 本地只有 loras/foo,manifest 要 checkpoints/foo → MISSING,不是 mismatch/present [H1]
+    c = _conn(tmp_path)
+    _model(c, _root(c, "/m"), "loras", "foo.safetensors", sha256="b" * 64)
+    c.commit()
+    rep = manifest.verify_bundle(c, _bundle_of([{
+        "ref_string": "foo.safetensors", "filename": "foo.safetensors",
+        "dir_type": "checkpoints", "lock": "exact", "sha256": "a" * 64}]))
+    assert rep["summary"]["missing"] == 1
+    assert rep["missing"][0]["filename"] == "foo.safetensors"
+
+
+def test_verify_drops_unsafe_civitai_url(tmp_path):
+    c = _conn(tmp_path)
+    rep = manifest.verify_bundle(c, _bundle_of([{
+        "ref_string": "z.safetensors", "filename": "z.safetensors", "dir_type": "loras",
+        "lock": "expected", "civitai": {"url": "javascript:alert(1)"}}]))
+    assert rep["missing"][0]["civitai_url"] is None       # [B1]
+
+
+def test_invalid_sha_degrades_to_name_path(tmp_path):
+    # 非 64-hex 的 sha 不进 SQL,降级为无-sha 路径 [L2]
+    c = _conn(tmp_path)
+    _model(c, _root(c, "/m"), "loras", "a.safetensors", sha256="a" * 64)
+    c.commit()
+    rep = manifest.verify_bundle(c, _bundle_of([{
+        "ref_string": "a.safetensors", "filename": "a.safetensors", "dir_type": "loras",
+        "lock": "exact", "sha256": "'; DROP TABLE models; --"}]))
+    assert rep["summary"]["present_unverified"] == 1
+    assert c.execute("SELECT COUNT(*) c FROM models").fetchone()["c"] == 1
+
+
+def test_roundtrip_fully_hashed_workflow_is_all_exact(tmp_path):
+    # 只有「全 hash + 全 path 解析」的 workflow 才可断言全 present(exact) [L7]
+    c = _conn(tmp_path)
+    mr, wr = _root(c, "/m"), _root(c, "/w", "workflow")
+    m1 = _model(c, mr, "checkpoints", "a.safetensors", sha256="a" * 64)
+    m2 = _model(c, mr, "loras", "sub/b.safetensors", sha256="b" * 64)
+    p = tmp_path / "rt.json"
+    p.write_bytes(b'{"nodes": []}')
+    wf = _workflow(c, wr, str(p), "rt.json", 2)
+    _edge(c, wf, "a.safetensors", "CheckpointLoaderSimple", "checkpoints", m1, "path")
+    _edge(c, wf, "sub/b.safetensors", "LoraLoader", "loras", m2, "path")
+    c.commit()
+
+    body, _ = manifest.build_bundle(c, wf)
+    rep = manifest.verify_bundle(c, body)
+    assert rep["summary"] == {"present_exact": 2, "present_unverified": 0, "mismatch": 0,
+                              "ambiguous": 0, "missing": 0, "total": 2}
+    assert rep["workflow"]["filename"] == "rt.json"

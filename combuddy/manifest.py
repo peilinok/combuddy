@@ -199,3 +199,61 @@ def _candidates(conn, entry):
         return rows or conn.execute(
             f"SELECT m.* FROM models m WHERE m.name_key=? {_ORDER}", (nk,)).fetchall()
     return []
+
+
+def verify_bundle(conn, body):
+    data = _read_manifest(body)
+    present, mismatch, ambiguous, missing = [], [], [], []
+    n_exact = n_unverified = 0
+    for entry in data["models"]:
+        ref, dt = entry["ref_string"], entry.get("dir_type")
+        civ = entry.get("civitai")
+        url = _safe_civitai_url(civ.get("url")) if isinstance(civ, dict) else None
+        sha = entry.get("sha256")
+        sha = sha if isinstance(sha, str) and _SHA_RE.fullmatch(sha) else None
+
+        # 步骤 1:sha 正向命中。独立在前、if/elif 短路,不与 dir_type/name 条件 OR 进同一 SQL。
+        # 本步不看 lock:「本地存在字节一致的文件」是客观事实;lock 只约束步骤 3 的负向判定 [H3]
+        if sha:
+            hits = conn.execute(
+                f"SELECT m.* FROM models m WHERE m.sha256=? {_ORDER}", (sha,)).fetchall()
+            if hits:
+                present.append({"ref_string": ref, "dir_type": dt,
+                                "confidence": "exact", "model_id": hits[0]["id"]})
+                n_exact += 1
+                continue
+
+        # 步骤 2 + 3
+        cands = _candidates(conn, entry)
+        if not cands:
+            missing.append({"ref_string": ref, "dir_type": dt,
+                            "filename": entry.get("filename"), "civitai_url": url})
+        elif len(cands) > 1:
+            ambiguous.append({"ref_string": ref, "dir_type": dt,
+                              "candidates": [{"model_id": x["id"], "rel_path": x["rel_path"],
+                                              "sha256": x["sha256"]} for x in cands]})
+        else:
+            cd = cands[0]
+            if entry.get("lock") == "exact" and sha and cd["sha256"] is not None:
+                # cd 已 hash,且必 != sha(否则步骤 1 已命中)→ 真·版本不符
+                mismatch.append({"ref_string": ref, "dir_type": dt,
+                                 "model_id": cd["id"], "civitai_url": url})
+            else:
+                item = {"ref_string": ref, "dir_type": dt,
+                        "confidence": "unverified", "model_id": cd["id"]}
+                if entry.get("lock") == "exact" and sha and cd["sha256"] is None:
+                    item["needs_hash"] = True      # 本地未 hash,无法核验 → 不得报 mismatch [B2]
+                present.append(item)
+                n_unverified += 1
+
+    wf = data.get("workflow")
+    return {
+        "workflow": wf if isinstance(wf, dict) else {},
+        "generated_by": data.get("generated_by"),
+        "present": present, "mismatch": mismatch, "ambiguous": ambiguous, "missing": missing,
+        # summary 必须拆开 exact / unverified:unverified 是跨机分享高发档,合并计数
+        # 会被用户读成「齐了」[M1]
+        "summary": {"present_exact": n_exact, "present_unverified": n_unverified,
+                    "mismatch": len(mismatch), "ambiguous": len(ambiguous),
+                    "missing": len(missing), "total": len(data["models"])},
+    }
