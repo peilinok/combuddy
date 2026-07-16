@@ -9,6 +9,9 @@ from urllib.parse import urlparse
 from . import __version__, norm
 
 MANIFEST_VERSION = 1
+BODY_MAX = 10 * 1024 * 1024        # 上传体上限(压缩后)
+MANIFEST_MAX = 4 * 1024 * 1024     # manifest.json 解压后上限 [H4]
+MODELS_MAX = 10_000                # 条目数上限,防 N× SQL 放大 [M3]
 
 
 class ManifestError(Exception):
@@ -92,3 +95,40 @@ def build_bundle(conn, workflow_id):
                    json.dumps(build_manifest(conn, wf), ensure_ascii=False, indent=2))
         z.writestr("workflow.json", wf_bytes)
     return buf.getvalue(), os.path.splitext(wf["filename"])[0]
+
+
+def _read_manifest(body):
+    """解析不可信 bundle。只按固定名读进内存、从不解包落盘 → zip-slip 不适用。"""
+    try:
+        z = zipfile.ZipFile(io.BytesIO(body))
+    except (zipfile.BadZipFile, OSError):
+        raise ManifestError("bad_zip")
+    try:
+        info = z.getinfo("manifest.json")
+    except KeyError:
+        raise ManifestError("missing_manifest")
+    if info.file_size > MANIFEST_MAX:
+        raise ManifestError("too_large")       # cheap 提前拒绝:file_size 是攻击者元数据
+    with z.open("manifest.json") as fp:
+        raw = fp.read(MANIFEST_MAX + 1)        # 有界解压:权威判据 [H4]
+    if len(raw) > MANIFEST_MAX:
+        raise ManifestError("too_large")
+    try:
+        data = json.loads(raw)
+    except (ValueError, RecursionError):
+        raise ManifestError("bad_json")
+    if not isinstance(data, dict):
+        raise ManifestError("bad_json")
+    ver = data.get("combuddy_manifest")
+    # bool 是 int 的子类,True 会骗过 isinstance(ver, int)
+    if isinstance(ver, bool) or not isinstance(ver, int) or not 1 <= ver <= MANIFEST_VERSION:
+        raise ManifestError("unsupported_version")
+    models = data.get("models")
+    if not isinstance(models, list):
+        raise ManifestError("bad_json")
+    if len(models) > MODELS_MAX:
+        raise ManifestError("too_large")
+    for m in models:                            # 结构校验必须在跑算法之前 [M2]
+        if not isinstance(m, dict) or not isinstance(m.get("ref_string"), str):
+            raise ManifestError("bad_json")
+    return data

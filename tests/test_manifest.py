@@ -170,6 +170,29 @@ def test_bundle_source_missing(tmp_path):
     assert (ei.value.reason, ei.value.status) == ("source_missing", 409)
 
 
+def _zip_of(manifest_bytes, workflow_bytes=b"{}"):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        if manifest_bytes is not None:
+            z.writestr("manifest.json", manifest_bytes)
+        z.writestr("workflow.json", workflow_bytes)
+    return buf.getvalue()
+
+
+def _manifest_bytes(models, version=1):
+    return json.dumps({
+        "combuddy_manifest": version,
+        "generated_by": "combuddy test",
+        "generated_at": "2026-07-16T00:00:00Z",
+        "workflow": {"filename": "x.json", "ref_count": len(models)},
+        "models": models,
+    }).encode()
+
+
+def _bundle_of(models, version=1):
+    return _zip_of(_manifest_bytes(models, version))
+
+
 def _app(tmp_path):
     from fastapi.testclient import TestClient
     from combuddy.api import create_app
@@ -238,3 +261,51 @@ def test_export_filename_header_handles_cjk(tmp_path):
     assert "filename*=UTF-8''" in cd        # RFC 5987 保留原名
     assert "%E6%88%91" in cd                # "我" 的 percent-encoding
     assert set(zipfile.ZipFile(io.BytesIO(r.content)).namelist()) == {"manifest.json", "workflow.json"}
+
+
+def test_read_manifest_ok():
+    data = manifest._read_manifest(_bundle_of([{"ref_string": "a.safetensors"}]))
+    assert data["models"][0]["ref_string"] == "a.safetensors"
+
+
+@pytest.mark.parametrize("body,reason", [
+    (b"not a zip at all", "bad_zip"),
+    (_zip_of(None), "missing_manifest"),
+    (_zip_of(b"{not json"), "bad_json"),
+    (_zip_of(b'"a string, not an object"'), "bad_json"),
+    (_zip_of(json.dumps({"combuddy_manifest": 1, "models": "nope"}).encode()), "bad_json"),
+    (_zip_of(json.dumps({"combuddy_manifest": 1, "models": [{"no_ref": 1}]}).encode()), "bad_json"),
+    (_zip_of(json.dumps({"combuddy_manifest": 99, "models": []}).encode()), "unsupported_version"),
+    (_zip_of(json.dumps({"combuddy_manifest": "1", "models": []}).encode()), "unsupported_version"),
+    (_zip_of(json.dumps({"combuddy_manifest": True, "models": []}).encode()), "unsupported_version"),
+    (_zip_of(json.dumps({"models": []}).encode()), "unsupported_version"),
+])
+def test_read_manifest_rejects_malformed(body, reason):
+    with pytest.raises(manifest.ManifestError) as ei:
+        manifest._read_manifest(body)
+    assert ei.value.reason == reason
+    assert ei.value.status == 400
+
+
+def test_read_manifest_rejects_zip_bomb():
+    # 压缩后极小、解压后超限:压缩体积上限根本拦不住 zipfile.read() 的无界解压 [H4]
+    body = _zip_of(b"A" * (manifest.MANIFEST_MAX + 1024))
+    assert len(body) < 100_000
+    with pytest.raises(manifest.ManifestError) as ei:
+        manifest._read_manifest(body)
+    assert ei.value.reason == "too_large"
+
+
+def test_read_manifest_rejects_too_many_models():
+    body = _bundle_of([{"ref_string": f"m{i}.safetensors"} for i in range(manifest.MODELS_MAX + 1)])
+    with pytest.raises(manifest.ManifestError) as ei:
+        manifest._read_manifest(body)
+    assert ei.value.reason == "too_large"
+
+
+def test_read_manifest_rejects_deeply_nested_json():
+    # 超深嵌套会让 json.loads 抛 RecursionError → 必须归一化成 400,不能 500
+    body = _zip_of(b"[" * 100_000 + b"]" * 100_000)
+    with pytest.raises(manifest.ManifestError) as ei:
+        manifest._read_manifest(body)
+    assert ei.value.reason == "bad_json"
