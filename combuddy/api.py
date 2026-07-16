@@ -1,8 +1,8 @@
 import os, re, threading, mimetypes
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
-from . import db as dbm, config, stats, scan_service, queries, trash, detect
+from . import db as dbm, config, stats, scan_service, queries, trash, detect, manifest
 
 # Windows 常把注册表 .js 的 Content Type 设成 text/plain,StaticFiles 据此对打包好的
 # 前端 JS 返回 text/plain,而浏览器/WebView2 以严格 MIME 拒绝执行 <script type="module">,
@@ -129,6 +129,19 @@ def create_app(db_path: str, static_dir: str | None = None, demo: bool = False,
         if d is None:
             return JSONResponse({"error": "not found"}, status_code=404)
         return d
+
+    @app.get("/api/workflows/{workflow_id}/bundle")
+    def api_workflow_bundle(workflow_id: int):
+        c = conn()
+        try:
+            data, stem = manifest.build_bundle(c, workflow_id)
+        except manifest.ManifestError as e:
+            return JSONResponse({"reason": e.reason}, status_code=e.status)
+        finally:
+            c.close()
+        safe = re.sub(r'[^\w\-. ]', "_", stem)[:80] or "workflow"   # 防响应头注入 [L12]
+        return Response(content=data, media_type="application/zip",
+                        headers={"Content-Disposition": f'attachment; filename="{safe}.combuddy.zip"'})
 
     @app.post("/api/cleanup/trash")
     def api_trash(body: dict):

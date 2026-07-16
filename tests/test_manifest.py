@@ -168,3 +168,54 @@ def test_bundle_source_missing(tmp_path):
     with pytest.raises(manifest.ManifestError) as ei:
         manifest.build_bundle(c, wf)
     assert (ei.value.reason, ei.value.status) == ("source_missing", 409)
+
+
+def _app(tmp_path):
+    from fastapi.testclient import TestClient
+    from combuddy.api import create_app
+    return TestClient(create_app(str(tmp_path / "t.sqlite"), static_dir=None))
+
+
+def test_export_endpoint_returns_zip(tmp_path):
+    c = _conn(tmp_path)
+    wr = _root(c, "/w", "workflow")
+    p = tmp_path / "my flow.json"
+    p.write_bytes(b'{"nodes": []}')
+    wf = _workflow(c, wr, str(p), "my flow.json", 0)
+    c.commit()
+    c.close()
+
+    r = _app(tmp_path).get(f"/api/workflows/{wf}/bundle")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/zip"
+    assert "my flow.combuddy.zip" in r.headers["content-disposition"]
+    assert set(zipfile.ZipFile(io.BytesIO(r.content)).namelist()) == {"manifest.json", "workflow.json"}
+
+
+def test_export_endpoint_errors(tmp_path):
+    c = _conn(tmp_path)
+    wr = _root(c, "/w", "workflow")
+    wf = _workflow(c, wr, str(tmp_path / "gone.json"), "gone.json", 0)
+    c.commit()
+    c.close()
+    client = _app(tmp_path)
+
+    assert client.get("/api/workflows/999/bundle").status_code == 404
+    assert client.get("/api/workflows/999/bundle").json()["reason"] == "not_found"
+    r = client.get(f"/api/workflows/{wf}/bundle")
+    assert r.status_code == 409 and r.json()["reason"] == "source_missing"
+
+
+def test_export_filename_header_is_sanitized(tmp_path):
+    # 文件名里的引号/控制字符会注入响应头 [L12]
+    c = _conn(tmp_path)
+    wr = _root(c, "/w", "workflow")
+    p = tmp_path / "evil.json"
+    p.write_bytes(b"{}")
+    wf = _workflow(c, wr, str(p), 'ev"il\r\n.json', 0)
+    c.commit()
+    c.close()
+
+    cd = _app(tmp_path).get(f"/api/workflows/{wf}/bundle").headers["content-disposition"]
+    assert '"' not in cd.replace('filename="', "").replace('.combuddy.zip"', "")
+    assert "\r" not in cd and "\n" not in cd
