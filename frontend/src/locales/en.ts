@@ -5,7 +5,7 @@ export default {
     title: "Settings", saving: "Saving…", saved: "Saved ✓", appearance: "Appearance", language: "Language", langZh: "中文", langEn: "English",
     scanHash: "Scan & Hash", autoHash: "Compute sha256 automatically after scan", hashWorkers: "Hash workers",
     maxMbps: "Rate limit MB/s (0 = unlimited)",
-    civitaiEnrich: "Civitai Enrichment", onlineEnrich: "Auto-identify online after scan (hash only)",
+    civitaiEnrich: "Civitai Enrichment", onlineEnrich: "Auto-identify online after scan; also gates \"Find it\" filename search (sent only when clicked)",
     nsfwThreshold: "NSFW blur threshold (higher = less blurring)",
     roots: "Root Directories", pathPlaceholder: "Absolute directory path", add: "Add",
     removeRoot: "Remove this root",

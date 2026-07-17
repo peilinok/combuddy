@@ -24,7 +24,11 @@ async function copyPath() {
   try { await navigator.clipboard.writeText(path.value); }
   catch { /* 桌面 WKWebView 常拒 clipboard,降级提示手动复制 [M10] */ alert(t("locate.copyFailed")); }
 }
-async function rescan() { if (!scanning.value && !demo.value) await postScan(); }
+async function rescan() {
+  if (!scanning.value && !demo.value) {
+    try { await postScan(); } catch { /* scan-start failure must not block */ }
+  }
+}
 </script>
 
 <template>

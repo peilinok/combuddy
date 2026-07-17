@@ -197,6 +197,12 @@ def test_locate_same_origin_allowed(tmp_path, monkeypatch):
     r = _client(tmp_path).get("/api/locate?q=x", headers={"sec-fetch-site": "same-origin"})
     assert r.status_code == 200
 
+def test_locate_none_origin_allowed(tmp_path, monkeypatch):
+    # 地址栏直开 / 无 Referrer 时浏览器发 sec-fetch-site=none,守卫须放行(不止 TestClient 缺省的 None)
+    monkeypatch.setattr("combuddy.civitai.fetch_search", lambda *a, **k: ("ok", []))
+    r = _client(tmp_path).get("/api/locate?q=x", headers={"sec-fetch-site": "none"})
+    assert r.status_code == 200
+
 def test_locate_online_disabled(tmp_path, monkeypatch):
     p = str(tmp_path / "t.sqlite"); c = db.connect(p); db.init_schema(c)
     config.set_settings(c, {"online_enrich": False}); c.close()

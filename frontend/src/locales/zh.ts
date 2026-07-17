@@ -5,7 +5,7 @@ export default {
     title: "设置", saving: "保存中…", saved: "已保存 ✓", appearance: "外观", language: "语言", langZh: "中文", langEn: "English",
     scanHash: "扫描 & 哈希", autoHash: "扫描后自动计算 sha256", hashWorkers: "哈希并发",
     maxMbps: "限速 MB/s(0=不限)",
-    civitaiEnrich: "Civitai 富化", onlineEnrich: "扫描后自动联网识别(仅发送哈希)",
+    civitaiEnrich: "Civitai 富化", onlineEnrich: "扫描后自动按哈希识别,也控制「帮我找」的文件名搜索(仅点击时发送)",
     nsfwThreshold: "NSFW 模糊阈值(越高越少模糊)",
     roots: "根目录", pathPlaceholder: "目录绝对路径", add: "添加",
     removeRoot: "移除此目录",
