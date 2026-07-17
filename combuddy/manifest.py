@@ -228,7 +228,8 @@ def verify_bundle(conn, body):
         cands = _candidates(conn, entry)
         if not cands:
             missing.append({"ref_string": ref, "dir_type": dt,
-                            "filename": entry.get("filename"), "civitai_url": url})
+                            "filename": entry.get("filename"), "civitai_url": url,
+                            **({"sha256": sha} if sha else {})})
         elif len(cands) > 1:
             ambiguous.append({"ref_string": ref, "dir_type": dt,
                               "candidates": [{"model_id": x["id"], "rel_path": x["rel_path"],
@@ -238,7 +239,7 @@ def verify_bundle(conn, body):
             if entry.get("lock") == "exact" and sha and cd["sha256"] is not None:
                 # cd 已 hash,且必 != sha(否则步骤 1 已命中)→ 真·版本不符
                 mismatch.append({"ref_string": ref, "dir_type": dt,
-                                 "model_id": cd["id"], "civitai_url": url})
+                                 "model_id": cd["id"], "civitai_url": url, "sha256": sha})
             else:
                 item = {"ref_string": ref, "dir_type": dt,
                         "confidence": "unverified", "model_id": cd["id"]}

@@ -727,3 +727,23 @@ def test_verify_non_str_dir_type_does_not_cross_match(tmp_path):
     rep = manifest.verify_bundle(c, _bundle_of([{
         "ref_string": "foo.safetensors", "dir_type": 123, "lock": "expected"}]))
     assert rep["summary"]["missing"] == 1     # 无候选,绝不跨类型命中 loras/foo
+
+
+def test_verify_missing_and_mismatch_echo_sha(tmp_path):
+    c = db.connect(str(tmp_path / "t.sqlite")); db.init_schema(c)
+    mr = _root(c, "/m")
+    # 本地有一个 loras/have.safetensors,sha=本地值 → 与 bundle 的 exact 条目 sha 不同 → mismatch
+    _model(c, mr, "loras", "have.safetensors", sha256="b" * 64)
+    body = _bundle_of([                                                  # 条目列表直接进 _bundle_of [B1]
+        {"ref_string": "have.safetensors", "dir_type": "loras", "filename": "have.safetensors",
+         "sha256": "a" * 64, "lock": "exact"},                          # 同名不同 sha → mismatch
+        {"ref_string": "gone.safetensors", "dir_type": "loras", "filename": "gone.safetensors",
+         "sha256": "c" * 64, "lock": "exact"},                          # 本地无 → missing,带 sha
+        {"ref_string": "nohash.safetensors", "dir_type": "loras", "filename": "nohash.safetensors",
+         "lock": "expected"}])                                           # 打包方也没有 → missing,无 sha
+    rep = manifest.verify_bundle(c, body)
+    mm = {m["ref_string"]: m for m in rep["mismatch"]}
+    ms = {m["ref_string"]: m for m in rep["missing"]}
+    assert mm["have.safetensors"]["sha256"] == "a" * 64                 # mismatch 必带 bundle 条目 sha(正确版本)
+    assert ms["gone.safetensors"]["sha256"] == "c" * 64                 # missing(lock=exact) 带 sha
+    assert "sha256" not in ms["nohash.safetensors"]                     # missing(lock=expected) 无 sha
