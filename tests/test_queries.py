@@ -48,6 +48,15 @@ def test_workflow_resolution_ambiguous(tmp_path):
     st = {e["ref_string"]: e["status"] for e in r["edges"]}
     assert st["dup.safetensors"] == "ambiguous"
 
+def test_workflow_resolution_surfaces_dir_type(tmp_path):
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn); _seed(conn)
+    conn.execute("UPDATE edges SET ref_dir_type='checkpoints' WHERE ref_string='a.safetensors'")
+    conn.commit()
+    r = queries.get_workflow_resolution(conn, 1)
+    dt = {e["ref_string"]: e["dir_type"] for e in r["edges"]}
+    assert dt["a.safetensors"] == "checkpoints"
+    assert dt["gone.safetensors"] is None            # 未设 → None
+
 def _one(conn, base_arch=None):
     conn.execute("INSERT INTO roots(id,kind,path,enabled) VALUES(1,'model','/r',1)")
     conn.execute(f"""INSERT INTO models(id,root_id,path,rel_path,dir_type,rel_in_type,filename,ext,
