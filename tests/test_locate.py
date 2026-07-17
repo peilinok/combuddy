@@ -259,3 +259,29 @@ def test_locate_demo_is_canned_and_zero_network(tmp_path, monkeypatch):
     n = cl.get("/api/locate?q=aurora").json()
     assert n["mode"] == "name" and len(n["candidates"]) == 2 and any(c["file_match"] for c in n["candidates"])
     assert hcalls == [] and scalls == []                  # demo 零网络,两函数都没被调 [M9]
+
+
+import struct
+from combuddy import scan_service, queries
+
+def _st(p, header):   # 造最小 safetensors:8 字节长度 + JSON 头
+    blob = json.dumps(header).encode(); p.write_bytes(struct.pack("<Q", len(blob)) + blob)
+
+def test_closed_loop_missing_then_placed_becomes_path(tmp_path):
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    # 关断 hashing/enrich:resolve 在扫描第 2 相位、不需 sha,且永不联网 [M8]
+    config.set_settings(conn, {"auto_hash": False, "online_enrich": False})
+    mroot = tmp_path / "models"; (mroot / "loras").mkdir(parents=True)
+    wroot = tmp_path / "wf"; wroot.mkdir()
+    (wroot / "w.json").write_text(json.dumps({"nodes": [
+        {"type": "LoraLoader", "widgets_values": ["foo.safetensors", 1.0, 1.0]}]}))
+    config.set_roots(conn, [{"kind": "model", "path": str(mroot), "source": "manual"},
+                            {"kind": "workflow", "path": str(wroot), "source": "manual"}])
+    scan_service.run_scan(conn)
+    edge = queries.get_workflow_resolution(conn, 1)["edges"][0]
+    assert edge["status"] == "missing" and edge["dir_type"] == "loras"
+    # 按期望路径 loras/foo.safetensors 落文件 → 重扫 → 该引用绑定为 path
+    _st(mroot / "loras" / "foo.safetensors",
+        {"double_blocks.0.w": {"dtype": "F16", "shape": [1], "data_offsets": [0, 2]}})
+    scan_service.run_scan(conn)
+    assert queries.get_workflow_resolution(conn, 1)["edges"][0]["status"] == "path"
