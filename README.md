@@ -16,7 +16,7 @@
 
 combuddy indexes your local ComfyUI model library and workflow files, then shows the dependency graph in a web UI. It helps answer practical questions: which workflows use this model, which models are missing for a workflow, what is safe to move to recoverable trash, and which duplicate files are wasting disk space.
 
-Screenshots in this README use the bundled demo data.
+Screenshots use the bundled demo data, except the Model Library view, which shows a real local library with Civitai enrichment.
 
 ## Try It First
 
