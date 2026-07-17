@@ -18,9 +18,10 @@ import Slider from "primevue/slider";
 import InputNumber from "primevue/inputnumber";
 import InputText from "primevue/inputtext";
 import Button from "primevue/button";
+import Dialog from "primevue/dialog";
 
 const app = createApp(App).use(PrimeVue).use(i18n);
 for (const [n, c] of Object.entries({ Menu, Card, Knob, ProgressBar, DataView,
-  Tag, Image, Panel, InputSwitch, Slider, InputNumber, InputText, Button }))
+  Tag, Image, Panel, InputSwitch, Slider, InputNumber, InputText, Button, Dialog }))
   app.component(n, c as any);
 app.mount("#app");
