@@ -58,20 +58,13 @@ jobs:
               print(tomllib.load(f)["project"]["version"])
           PY
           )"
+          # main is protected (PR + review required), so this workflow cannot push a
+          # bump commit itself — a direct push is rejected with GH013. The version bump
+          # must already be on main (land it via PR first; see RELEASING.md). If it is
+          # not, fail fast with a clear pointer instead of dying on a rejected push.
           if [ "$(python scripts/release_prepare.py needs-bump "$CURRENT" "$VERSION")" = "bump" ]; then
-            sed -i -E 's/^version = .*/version = "'"$VERSION"'"/' pyproject.toml
-            VERSION="$VERSION" python - <<'PY'
-          import os
-          import tomllib
-
-          with open("pyproject.toml", "rb") as f:
-              assert tomllib.load(f)["project"]["version"] == os.environ["VERSION"]
-          PY
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add pyproject.toml
-            git commit -m "chore(release): $VERSION"
-            git push origin HEAD:main
+            echo "::error::main is at $CURRENT but this release wants $VERSION. Open a PR that sets pyproject.toml version to $VERSION (chore(release): $VERSION), merge it into main, then re-run this workflow. See RELEASING.md."
+            exit 1
           fi
 
           HEAD="$(git rev-parse HEAD)"
