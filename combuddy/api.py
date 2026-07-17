@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
-from . import db as dbm, config, stats, scan_service, queries, trash, detect, manifest
+from . import db as dbm, config, stats, scan_service, queries, trash, detect, manifest, civitai
 
 # Windows 常把注册表 .js 的 Content Type 设成 text/plain,StaticFiles 据此对打包好的
 # 前端 JS 返回 text/plain,而浏览器/WebView2 以严格 MIME 拒绝执行 <script type="module">,
@@ -24,6 +24,27 @@ def _sniff_image(path: str) -> str:
     if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
         return "image/webp"
     return "application/octet-stream"
+
+def _hash_candidate(ident: dict) -> dict:
+    # 白名单挑字段:剔除 image_url/trigger_words/nsfw_level(隐私:不返回缩略图),remap name→model_name [M11]
+    return {"model_name": ident.get("name"), "version_name": ident.get("version_name"),
+            "model_type": ident.get("model_type"), "base_model": ident.get("base_model"),
+            "civitai_url": ident.get("civitai_url")}
+
+def _demo_locate(sha256: str, q: str):
+    if sha256:
+        return {"mode": "hash", "found": True, "candidate": {
+            "model_name": "Demo Aurora XL", "version_name": "v1.0", "model_type": "Checkpoint",
+            "base_model": "SDXL 1.0", "civitai_url": "https://civitai.com/models/1"}}
+    if q:
+        return {"mode": "name", "types_filter": None, "candidates": [
+            {"model_name": "Demo Aurora XL", "version_name": "v1.0", "model_type": "Checkpoint",
+             "base_model": "SDXL 1.0", "civitai_url": "https://civitai.com/models/1",
+             "file": {"name": "auroraXL_v1.safetensors", "size_kb": 6775434.0}, "file_match": True},
+            {"model_name": "Demo Nebula", "version_name": "v2", "model_type": "Checkpoint",
+             "base_model": "SDXL 1.0", "civitai_url": "https://civitai.com/models/2",
+             "file": {"name": "nebula.safetensors", "size_kb": 2100000.0}, "file_match": False}]}
+    return JSONResponse({"reason": "bad_request"}, status_code=400)
 
 def create_app(db_path: str, static_dir: str | None = None, demo: bool = False,
                desktop_state: dict | None = None) -> FastAPI:
@@ -194,6 +215,43 @@ def create_app(db_path: str, static_dir: str | None = None, demo: bool = False,
     def api_restore(body: dict):
         c = conn(); res = trash.restore(c, body.get("trash_ids", [])); c.close()
         return res
+
+    # 校验优先级(spec 未定、此处定稿):demo → 跨源守卫 → online 门控 → 参数校验 → 分派 [M1]。
+    # 跨源请求即便参数非法也先得 403(而非 400);TestClient 默认不发 sec-fetch-site → None → 放行,故
+    # test_locate_bad_request_no_params 能拿到 400——这是有意依赖的前提。
+    @app.get("/api/locate")
+    def api_locate(request: Request, sha256: str = "", q: str = "", ref: str = "",
+                   dir_type: str = "", nofilter: int = 0):
+        if demo:                                          # 首行短路:canned、零网络、零 DB
+            return _demo_locate(sha256, q)
+        if request.headers.get("sec-fetch-site") not in (None, "same-origin", "none"):
+            return JSONResponse({"reason": "forbidden"}, status_code=403)   # 跨源 drive-by 守卫 [H1]
+        c = conn(); enabled = config.get_settings(c)["online_enrich"]; c.close()   # 按惯例 close [L2]
+        if not enabled:
+            return JSONResponse({"reason": "online_disabled"}, status_code=409)
+        if sha256:
+            if not re.fullmatch(r"[0-9a-fA-F]{64}", sha256):
+                return JSONResponse({"reason": "bad_request"}, status_code=400)
+            kind, ident = civitai.lookup_by_hash(sha256.lower())
+            if kind == "found":
+                return {"mode": "hash", "found": True, "candidate": _hash_candidate(ident)}
+            if kind == "notfound":
+                return {"mode": "hash", "found": False}
+            if kind == "rate_limited":
+                return JSONResponse({"reason": "rate_limited"}, status_code=429)
+            return JSONResponse({"reason": "civitai_unreachable"}, status_code=502)
+        if q:
+            if len(q) > 200 or len(ref) > 200:            # ref 也须封顶(spec API 表 ≤200)[M2]
+                return JSONResponse({"reason": "bad_request"}, status_code=400)
+            types = None if nofilter else civitai._TYPES.get(dir_type)
+            kind, items = civitai.fetch_search(q, types)
+            if kind == "rate_limited":
+                return JSONResponse({"reason": "rate_limited"}, status_code=429)
+            if kind == "error":
+                return JSONResponse({"reason": "civitai_unreachable"}, status_code=502)
+            return {"mode": "name", "types_filter": types,
+                    "candidates": civitai.normalize_search(items, ref or None)}
+        return JSONResponse({"reason": "bad_request"}, status_code=400)
 
     @app.get("/api/preview/{sha256}")
     def api_preview(sha256: str, hd: int = 0):

@@ -1,6 +1,6 @@
 [project]
 name = "combuddy"
-version = "0.4.0"
+version = "0.5.0"
 description = "A local model & workflow dependency manager for ComfyUI"
 readme = "README.md"
 requires-python = ">=3.11"

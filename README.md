@@ -113,7 +113,7 @@ combuddy is local-first: model files, workflow files, and local filesystem paths
 
 Two network paths are intentional and limited:
 
-- **Civitai enrichment** is on by default and can be turned off in Settings. Model lookup sends the locally computed SHA-256 hash to Civitai; model files and local paths are not uploaded. When a match is found, combuddy downloads and caches preview images.
+- **Civitai enrichment** (via the `online_enrich` toggle in Settings) is on by default. This single toggle gates two network flows: **hash-based model identification** (SHA-256 lookup) and **user-initiated filename search for missing models** (the "Locate" feature). In both cases, only the hash or filename is sent to Civitai; model files and local paths are never uploaded. When a match is found, combuddy caches preview images locally. Disable this toggle to prevent all Civitai traffic.
 - **Desktop update checks** run only in the desktop app and `combuddy desktop`. They fetch GitHub latest-release metadata to decide whether to show an update banner. Plain `combuddy` and `combuddy demo` do not perform this check.
 
 The demo uses bundled sample data, a temporary database, and no online enrichment.

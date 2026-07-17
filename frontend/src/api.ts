@@ -70,3 +70,6 @@ export async function fetchWorkflowBundle(id: number): Promise<Blob> {
 // 直接把 File 当 body 发原始字节,后端 request.stream() 收,无需 multipart。
 export const verifyManifest = (file: File | Blob) =>
   fetch("/api/manifest/verify", { method: "POST", body: file }).then(jsonOrThrow);
+
+export const fetchLocate = (p: Record<string, string>) =>
+  fetch("/api/locate" + (qs(p) ? "?" + qs(p) : "")).then(jsonOrThrow);

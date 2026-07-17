@@ -55,7 +55,7 @@ def get_workflow_resolution(conn, workflow_id):
         return None
     edges = []
     for e in conn.execute(
-        """SELECT e.ref_string, e.node_type, e.match_kind, e.model_id, m.filename model_filename
+        """SELECT e.ref_string, e.node_type, e.ref_dir_type dir_type, e.match_kind, e.model_id, m.filename model_filename
            FROM edges e LEFT JOIN models m ON m.id=e.model_id WHERE e.workflow_id=?
            ORDER BY e.model_id IS NULL, e.ref_string""", (workflow_id,)):
         d = dict(e)

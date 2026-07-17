@@ -5,6 +5,9 @@ import { useWorkflows } from "../useWorkflows";
 import { useManifest } from "../useManifest";
 import { useDesktop } from "../useDesktop";
 import { view, pendingWorkflowId, pendingModelId } from "../useNav";
+import LocateDialog from "./LocateDialog.vue";
+import { useLocate } from "../useLocate";
+const { openFor } = useLocate();
 const { t } = useI18n();
 const { workflows, selected, load, select, error } = useWorkflows();
 const { report, error: mError, verifying, exportBundle, verifyBundle } = useManifest();
@@ -74,6 +77,8 @@ async function onFile(e: Event) {
         <a v-if="it.civitai_url" :href="it.civitai_url" target="_blank"
           @click="isDesktop && ($event.preventDefault(), openExternal(it.civitai_url))"
           class="text-primary text-xs shrink-0">{{ t("manifest.openCivitai") }}</a>
+        <button @click="openFor({ ref_string: it.ref_string, dir_type: it.dir_type, sha256: it.sha256 })"
+          class="text-primary text-xs shrink-0 hover:underline">{{ t("locate.ctaCorrect") }}</button>
         <span @click="goModel(it.model_id)" class="text-primary text-xs shrink-0 cursor-pointer hover:underline">{{ t("workflow.viewModel") }}</span>
       </div>
 
@@ -93,6 +98,8 @@ async function onFile(e: Event) {
         <a v-if="it.civitai_url" :href="it.civitai_url" target="_blank"
           @click="isDesktop && ($event.preventDefault(), openExternal(it.civitai_url))"
           class="text-primary text-xs shrink-0">{{ t("manifest.openCivitai") }}</a>
+        <button @click="openFor({ ref_string: it.ref_string, dir_type: it.dir_type, sha256: it.sha256 })"
+          class="text-primary text-xs shrink-0 hover:underline">{{ t("locate.cta") }}</button>
       </div>
     </div>
     <div class="flex gap-4">
@@ -128,11 +135,15 @@ async function onFile(e: Event) {
               : e.status==='basename' ? 'bg-surface-hover text-color-secondary'
               : 'bg-primary/15 text-primary']">{{ t("workflow.st_" + e.status) }}</span>
           <span class="text-color truncate flex-1">{{ e.ref_string }}</span>
+          <button v-if="e.status === 'missing'"
+            @click="openFor({ ref_string: e.ref_string, dir_type: e.dir_type })"
+            class="text-primary text-xs shrink-0 hover:underline">{{ t("locate.cta") }}</button>
           <span v-if="e.status==='basename' && e.model_filename" class="text-color-secondary text-xs truncate max-w-48" :title="e.model_filename">→ {{ e.model_filename }}</span>
           <span v-if="e.model_id != null" @click="goModel(e.model_id)" class="text-primary text-xs shrink-0 cursor-pointer hover:underline">{{ t("workflow.viewModel") }}</span>
           <span class="text-color-secondary text-xs shrink-0">{{ e.node_type }}</span>
         </div>
       </div>
     </div>
+    <LocateDialog />
   </div>
 </template>
