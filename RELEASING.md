@@ -18,28 +18,47 @@ Publishing** — no API tokens are stored anywhere.
 
 ## Cutting a release
 
-One action does everything: version bump, tag, GitHub Release, PyPI publish, and
-desktop `.dmg` / `.exe` assets.
+`main` is protected (pull request + review required), so the release workflow
+**cannot push the version bump itself** — the bump must already be on `main`
+before you run the workflow. Releasing is two steps.
 
-1. Make sure `main` is green (the CI workflow passes).
-2. Go to GitHub → **Actions** → **Release** → **Run workflow**.
-3. Select the `main` branch and enter the release version with no leading `v`
-   (for example, `0.3.0`).
+### Step 1 — land the version bump on `main` (via PR)
+
+Open a PR that changes **only** `[project].version` in `pyproject.toml` to the new
+`X.Y.Z` (title e.g. `chore(release): X.Y.Z`) and merge it into `main`. Because
+`main` requires review and you can't approve your own PR, merge with an admin
+bypass (`gh pr merge <n> --admin`) or a second reviewer. This mirrors how 0.3.0
+(#20) and 0.4.0 (#22) shipped.
+
+`combuddy.__version__` is read from package metadata, so `pyproject.toml` is the
+only file to bump — never touch `combuddy/__init__.py`.
+
+### Step 2 — run the Release workflow
+
+1. Make sure `main` is green (the CI workflow passes) and its `pyproject.toml`
+   already shows the target version.
+2. Go to GitHub → **Actions** → **Release** → **Run workflow** (or
+   `gh workflow run release.yml --ref main -f version=X.Y.Z`).
+3. Select the `main` branch and enter the version with no leading `v`
+   (for example, `0.4.0`).
 4. The workflow hard-checks that the version is semver and not already on PyPI.
-5. The workflow idempotently bumps `pyproject.toml`, commits that bump to `main`,
-   and creates tag `vX.Y.Z`.
+   Seeing `main` already at that version, it **skips the bump/push** and creates
+   tag `vX.Y.Z`.
    - If the tag does not exist, the workflow creates it.
    - If the tag already exists, it must point at the current `main` HEAD.
-6. The workflow creates a draft GitHub Release, publishes PyPI, builds and uploads
+5. The workflow creates a draft GitHub Release, publishes PyPI, builds and uploads
    the versioned macOS `.dmg` and Windows `.exe`, then publishes the GitHub Release.
-7. Verify the release:
+6. Verify the release:
    - `pipx install combuddy` (or `uvx combuddy`) should start the server and serve the UI.
    - GitHub Releases should contain `combuddy-X.Y.Z-macos-arm64.dmg` and
      `combuddy-X.Y.Z-windows-x64.exe`.
 
-`combuddy.__version__` is read from package metadata, so only `pyproject.toml`
-is bumped. After a release, run `git pull` locally so your `main` has the release
-commit and tag.
+> **If you skip Step 1**, the workflow fails fast in `prepare` with a message
+> telling you to open the bump PR first. (Before that guard existed it instead
+> failed on a rejected push — `remote: error: GH013: Repository rule violations
+> found for refs/heads/main`.)
+
+After a release, run `git pull` locally so your `main` has the bump commit and tag.
 
 The frontend is rebuilt in CI on every release, so the published wheel always ships a current UI —
 you never depend on the committed `combuddy/web/` being fresh at release time.
