@@ -186,3 +186,20 @@ def fetch_search(q, types=None, limit=20):
     if not (isinstance(data, dict) and isinstance(data.get("items"), list)):
         return ("error", None)                     # 形状意外(200 但缺 items)→ error,不 500 [M2③]
     return ("ok", data["items"])
+
+def lookup_by_hash(sha):
+    """hash 模式:复用 parse_version 的字段结构,但错误分档(区分 429/网络错误,供 /api/locate)。
+    与 fetch_by_hash 各自 urlopen(~4 行重复);不改 fetch_by_hash 的 skip-重试语义 [M1]。"""
+    req = urllib.request.Request(_API + sha, headers={"User-Agent": _UA})
+    try:
+        with urllib.request.urlopen(req, timeout=_TIMEOUT) as r:
+            data = json.loads(r.read().decode())
+        return ("found", parse_version(data))
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return ("notfound", None)
+        if e.code == 429:
+            return ("rate_limited", None)
+        return ("error", None)
+    except Exception:
+        return ("error", None)

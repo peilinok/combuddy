@@ -125,3 +125,35 @@ def test_types_map_values():
     assert civitai._TYPES["diffusion_models"] == ["Checkpoint"]
     assert civitai._TYPES.get("text_encoders") is None         # 故意不映射
     assert civitai._TYPES.get("clip_vision") is None
+
+_HASH_PAYLOAD = {"id": 9, "modelId": 5, "name": "v1.0", "baseModel": "SDXL",
+                 "model": {"name": "Cool Model", "type": "LORA"},
+                 "trainedWords": ["trig"], "images": [{"url": "https://img/x/width=1024/a.jpeg"}]}
+
+def test_lookup_by_hash_found(monkeypatch):
+    monkeypatch.setattr(civitai.urllib.request, "urlopen",
+                        lambda req, timeout=None: _Resp(json.dumps(_HASH_PAYLOAD).encode()))
+    kind, ident = civitai.lookup_by_hash("a" * 64)
+    assert kind == "found"
+    assert ident["name"] == "Cool Model" and ident["civitai_url"] == "https://civitai.com/models/5?modelVersionId=9"
+
+def test_lookup_by_hash_notfound(monkeypatch):
+    def f(req, timeout=None): raise urllib.error.HTTPError("u", 404, "nf", {}, None)
+    monkeypatch.setattr(civitai.urllib.request, "urlopen", f)
+    assert civitai.lookup_by_hash("a" * 64) == ("notfound", None)
+
+def test_lookup_by_hash_rate_limited(monkeypatch):
+    def f(req, timeout=None): raise urllib.error.HTTPError("u", 429, "rate", {}, None)
+    monkeypatch.setattr(civitai.urllib.request, "urlopen", f)
+    assert civitai.lookup_by_hash("a" * 64) == ("rate_limited", None)
+
+def test_lookup_by_hash_error(monkeypatch):
+    def f(req, timeout=None): raise urllib.error.URLError("boom")
+    monkeypatch.setattr(civitai.urllib.request, "urlopen", f)
+    assert civitai.lookup_by_hash("a" * 64) == ("error", None)
+
+def test_fetch_by_hash_unchanged_still_folds_429_to_skip(monkeypatch):
+    # 回归护栏:fetch_by_hash 的 skip 语义不能被本功能改动 [M1]
+    def f(req, timeout=None): raise urllib.error.HTTPError("u", 429, "rate", {}, None)
+    monkeypatch.setattr(civitai.urllib.request, "urlopen", f)
+    assert civitai.fetch_by_hash("a" * 64) == ("skip", None)
