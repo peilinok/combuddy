@@ -2,9 +2,15 @@ import json, os, time, urllib.request, urllib.error, urllib.parse
 from . import norm
 
 _API = "https://civitai.com/api/v1/model-versions/by-hash/"
+_SEARCH_API = "https://civitai.com/api/v1/models"
 _UA = "combuddy (model identity lookup)"
 _TIMEOUT = 10
 _DELAY = 0.3          # 礼貌延迟(秒),顺序请求
+# dir_type → Civitai types（2026-07-17 对官方 enums 端点实测核实精确大小写；缺失即不过滤）。
+# 键取 dir_type 词汇(=resolver.NODE_DIR_TYPE 值域子集)。text_encoders/clip_vision 故意不映射:Civitai 无对应类型。
+_TYPES = {"checkpoints": ["Checkpoint"], "diffusion_models": ["Checkpoint"],  # UNET 近似,裸 unet 有的归 Other,靠 nofilter 兜底 [L12]
+          "loras": ["LORA", "LoCon", "DoRA"], "vae": ["VAE"],
+          "controlnet": ["Controlnet"], "upscale_models": ["Upscaler"]}
 
 def _pick_preview(imgs: list) -> dict:
     """预览优先图片;没有图片再退视频;都没有 type 标记则取第一张。"""
@@ -161,3 +167,22 @@ def normalize_search(items: list, ref_name, limit: int = 5) -> list:
         })
     out.sort(key=lambda c: not c["file_match"])   # file_match 优先,稳定排序保留组内原序
     return out[:limit]
+
+def fetch_search(q, types=None, limit=20):
+    """按名搜索 Civitai。内部抓宽窗口(limit≈20)给 file_match 排序空间。
+    注:Civitai #1848(query+limit 组合异常)当前不复现;实现后需对活接口验一次该 limit 不触发 0 命中 [M4]。"""
+    params = [("query", q), ("limit", limit)]
+    if types:
+        params += [("types", t) for t in types]
+    url = _SEARCH_API + "?" + urllib.parse.urlencode(params, doseq=True)   # 中和注入 [L3]
+    req = urllib.request.Request(url, headers={"User-Agent": _UA})
+    try:
+        with urllib.request.urlopen(req, timeout=_TIMEOUT) as r:
+            data = json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        return ("rate_limited", None) if e.code == 429 else ("error", None)
+    except Exception:
+        return ("error", None)
+    if not (isinstance(data, dict) and isinstance(data.get("items"), list)):
+        return ("error", None)                     # 形状意外(200 但缺 items)→ error,不 500 [M2③]
+    return ("ok", data["items"])

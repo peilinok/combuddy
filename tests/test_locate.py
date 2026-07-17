@@ -1,4 +1,4 @@
-import json, urllib.error
+import io, json, urllib.error
 import pytest
 from combuddy import civitai
 
@@ -9,6 +9,16 @@ def _item(model_id, ver_id, model_name, ver_name, base, files, mtype="LORA"):
 
 def _file(name, size_kb=223286.08, ftype="Model", primary=True):
     return {"name": name, "sizeKB": size_kb, "type": ftype, "primary": primary}
+
+class _Resp(io.BytesIO):
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+
+def _capture(payload, box):
+    def f(req, timeout=None):
+        box.append(req.full_url)
+        return _Resp(json.dumps(payload).encode())
+    return f
 
 def test_normalize_basic_shape():
     items = [_item(5, 9, "Cool Model", "v1", "SDXL", [_file("cool_v1.safetensors")])]
@@ -69,3 +79,49 @@ def test_normalize_no_ref_disables_file_match():
 def test_normalize_truncates_to_limit():
     items = [_item(i, i, f"M{i}", "v", "SDXL", [_file(f"m{i}.safetensors")]) for i in range(1, 9)]
     assert len(civitai.normalize_search(items, "none.safetensors", limit=5)) == 5
+
+def test_fetch_search_encodes_query_and_types(monkeypatch):
+    box = []
+    payload = {"items": [_item(1, 1, "M", "v", "SDXL", [_file("m.safetensors")])]}
+    monkeypatch.setattr(civitai.urllib.request, "urlopen", _capture(payload, box))
+    kind, items = civitai.fetch_search("龙 & <lora>\n", types=["LORA", "LoCon"])
+    assert kind == "ok" and len(items) == 1
+    url = box[0]
+    assert "query=%E9%BE%99+%26+%3Clora%3E%0A" in url          # CJK/空格/&/</换行被 percent-encode [L3]
+    assert "types=LORA" in url and "types=LoCon" in url        # doseq 多值 [L3]
+
+def test_fetch_search_no_types_omits_param(monkeypatch):
+    box = []
+    monkeypatch.setattr(civitai.urllib.request, "urlopen", _capture({"items": []}, box))
+    civitai.fetch_search("x", types=None)
+    assert "types=" not in box[0]
+
+def test_fetch_search_rate_limited(monkeypatch):
+    def f(req, timeout=None): raise urllib.error.HTTPError("u", 429, "rate", {}, None)
+    monkeypatch.setattr(civitai.urllib.request, "urlopen", f)
+    assert civitai.fetch_search("x") == ("rate_limited", None)
+
+def test_fetch_search_error_on_5xx_and_urlerror(monkeypatch):
+    def f5(req, timeout=None): raise urllib.error.HTTPError("u", 500, "err", {}, None)
+    monkeypatch.setattr(civitai.urllib.request, "urlopen", f5)
+    assert civitai.fetch_search("x") == ("error", None)
+    def fe(req, timeout=None): raise urllib.error.URLError("boom")
+    monkeypatch.setattr(civitai.urllib.request, "urlopen", fe)
+    assert civitai.fetch_search("x") == ("error", None)
+
+def test_fetch_search_error_on_unexpected_shape(monkeypatch):
+    # HTTP 200 但结构意外(items 非 list / 顶层非 dict)→ error,不冒泡 500 [M2③]
+    monkeypatch.setattr(civitai.urllib.request, "urlopen", lambda req, timeout=None: _Resp(b'{"items": null}'))
+    assert civitai.fetch_search("x") == ("error", None)
+    monkeypatch.setattr(civitai.urllib.request, "urlopen", lambda req, timeout=None: _Resp(b'[]'))
+    assert civitai.fetch_search("x") == ("error", None)
+
+def test_types_map_values():
+    assert civitai._TYPES["checkpoints"] == ["Checkpoint"]
+    assert civitai._TYPES["loras"] == ["LORA", "LoCon", "DoRA"]
+    assert civitai._TYPES["vae"] == ["VAE"]
+    assert civitai._TYPES["controlnet"] == ["Controlnet"]      # 小写 n(Civitai 枚举)
+    assert civitai._TYPES["upscale_models"] == ["Upscaler"]
+    assert civitai._TYPES["diffusion_models"] == ["Checkpoint"]
+    assert civitai._TYPES.get("text_encoders") is None         # 故意不映射
+    assert civitai._TYPES.get("clip_vision") is None
