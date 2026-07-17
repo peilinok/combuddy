@@ -1,4 +1,5 @@
-import json, os, time, urllib.request, urllib.error
+import json, os, time, urllib.request, urllib.error, urllib.parse
+from . import norm
 
 _API = "https://civitai.com/api/v1/model-versions/by-hash/"
 _UA = "combuddy (model identity lookup)"
@@ -109,3 +110,54 @@ def enrich_models(conn, progress=None, should_cancel=None, fetch=fetch_by_hash, 
             progress(done, total)
         time.sleep(_DELAY)
     return {"found": found, "checked": done, "total": total}
+
+def _int_id(x) -> bool:
+    return isinstance(x, int) and not isinstance(x, bool)   # bool 是 int 子类,须排除 [L4]
+
+def _pick_file(files: list) -> dict | None:
+    """展示文件:primary 优先 → 首个 type=='Model' → 首个。"""
+    for f in files:
+        if f.get("primary"):
+            return f
+    for f in files:
+        if f.get("type") == "Model":
+            return f
+    return files[0] if files else None
+
+def normalize_search(items: list, ref_name, limit: int = 5) -> list:
+    """把 /api/v1/models 搜索结果归一成 UI 候选。file_match 两侧走 norm.match_key(NFC+反斜杠+casefold)。"""
+    key = norm.match_key(ref_name) if ref_name else None
+    out = []
+    for item in items:
+        mid = item.get("id")
+        versions = item.get("modelVersions") or []
+        chosen, matched = None, False
+        if key:                                   # 优先含匹配文件的版本 → 深链到确切版本
+            for v in versions:
+                if any(norm.match_key(f.get("name") or "") == key for f in (v.get("files") or [])):
+                    chosen, matched = v, True
+                    break
+        if chosen is None:                        # 否则取首个有文件的版本(Civitai 首个=最新)
+            for v in versions:
+                if v.get("files"):
+                    chosen = v
+                    break
+        if chosen is None:                        # 空 modelVersions / 全部无文件 → 跳过,不取 [0] [M2①]
+            continue
+        vid = chosen.get("id")
+        if not (_int_id(mid) and _int_id(vid)):   # id 非 int → URL 不可信,丢弃候选 [L4]
+            continue
+        f = _pick_file(chosen.get("files") or [])
+        if f is None:
+            continue
+        out.append({
+            "model_name": item.get("name"),
+            "version_name": chosen.get("name"),
+            "model_type": item.get("type"),
+            "base_model": chosen.get("baseModel"),          # 版本级字符串,非 model 级数组 [L9]
+            "civitai_url": f"https://civitai.com/models/{mid}?modelVersionId={vid}",
+            "file": {"name": f.get("name"), "size_kb": f.get("sizeKB")},
+            "file_match": matched,
+        })
+    out.sort(key=lambda c: not c["file_match"])   # file_match 优先,稳定排序保留组内原序
+    return out[:limit]
