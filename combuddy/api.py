@@ -1,8 +1,10 @@
 import os, re, threading, mimetypes
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse, FileResponse
+from urllib.parse import quote
+from fastapi import FastAPI, Request
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
-from . import db as dbm, config, stats, scan_service, queries, trash, detect
+from . import db as dbm, config, stats, scan_service, queries, trash, detect, manifest
 
 # Windows 常把注册表 .js 的 Content Type 设成 text/plain,StaticFiles 据此对打包好的
 # 前端 JS 返回 text/plain,而浏览器/WebView2 以严格 MIME 拒绝执行 <script type="module">,
@@ -129,6 +131,44 @@ def create_app(db_path: str, static_dir: str | None = None, demo: bool = False,
         if d is None:
             return JSONResponse({"error": "not found"}, status_code=404)
         return d
+
+    @app.get("/api/workflows/{workflow_id}/bundle")
+    def api_workflow_bundle(workflow_id: int):
+        c = conn()
+        try:
+            data, stem = manifest.build_bundle(c, workflow_id)
+        except manifest.ManifestError as e:
+            return JSONResponse({"reason": e.reason}, status_code=e.status)
+        finally:
+            c.close()
+        # Starlette 用 latin-1 编码响应头,CJK 文件名原样进 filename= 会 UnicodeEncodeError → 500。
+        # filename= 收紧到 ASCII 安全子集兜底(顺带挡住引号/CRLF 注入 [L12]),
+        # filename*= 按 RFC 5987 传 UTF-8 原名,现代浏览器优先用它。
+        safe = re.sub(r"[^A-Za-z0-9\-. ]", "_", stem)[:80] or "workflow"
+        star = quote(f"{stem}.combuddy.zip", safe="")
+        return Response(content=data, media_type="application/zip",
+                        headers={"Content-Disposition":
+                                 f"attachment; filename=\"{safe}.combuddy.zip\"; filename*=UTF-8''{star}"})
+
+    @app.post("/api/manifest/verify")
+    async def api_manifest_verify(request: Request):
+        # 不用 UploadFile:那会拉入 python-multipart 新依赖。
+        # 流式累加封顶,绝不 await request.body() 后再判大小 [H5]
+        size, chunks = 0, []
+        async for chunk in request.stream():
+            size += len(chunk)
+            if size > manifest.BODY_MAX:
+                return JSONResponse({"reason": "too_large"}, status_code=413)
+            chunks.append(chunk)
+        c = conn()
+        try:
+            # verify_bundle 同步且含多次 SQLite 查询(sha256 无索引 → 全表扫描),在唯一的 async
+            # 端点里内联跑会阻塞事件循环;卸载到线程池,避免大 manifest 拖垮 /api/stats 等并发请求 [审查]
+            return await run_in_threadpool(manifest.verify_bundle, c, b"".join(chunks))
+        except manifest.ManifestError as e:
+            return JSONResponse({"reason": e.reason}, status_code=e.status)
+        finally:
+            c.close()
 
     @app.post("/api/cleanup/trash")
     def api_trash(body: dict):

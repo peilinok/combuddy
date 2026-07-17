@@ -53,3 +53,20 @@ export const setSettings = (s: Record<string, unknown>) =>
   fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify(s) }).then(jsonOrThrow);
 export const fetchDetect = () => fetch("/api/detect").then(jsonOrThrow);
+
+// 导出是二进制:绝不能走 jsonOrThrow(它末尾无条件 r.json(),会把 zip 当 JSON 解析)。
+// 也不能只用 <a download>——那是浏览器黑盒,后端 404/409 前端读不到,用户会下到假 zip。
+export async function fetchWorkflowBundle(id: number): Promise<Blob> {
+  const r = await fetch(`/api/workflows/${id}/bundle`);
+  if (!r.ok) {
+    let detail: unknown = null;
+    try { detail = (await r.json())?.reason ?? null; } catch { /* 非 JSON 错误体 */ }
+    throw new ApiError(r.status, typeof detail === "string" ? detail : null);
+  }
+  return r.blob();
+}
+
+// 请求体是二进制、响应是 report JSON → 复用 jsonOrThrow 正确。
+// 直接把 File 当 body 发原始字节,后端 request.stream() 收,无需 multipart。
+export const verifyManifest = (file: File | Blob) =>
+  fetch("/api/manifest/verify", { method: "POST", body: file }).then(jsonOrThrow);
