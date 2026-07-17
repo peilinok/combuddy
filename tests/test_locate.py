@@ -157,3 +157,105 @@ def test_fetch_by_hash_unchanged_still_folds_429_to_skip(monkeypatch):
     def f(req, timeout=None): raise urllib.error.HTTPError("u", 429, "rate", {}, None)
     monkeypatch.setattr(civitai.urllib.request, "urlopen", f)
     assert civitai.fetch_by_hash("a" * 64) == ("skip", None)
+
+
+from fastapi.testclient import TestClient
+from combuddy import db, config
+from combuddy.api import create_app
+
+def _client(tmp_path):
+    return TestClient(create_app(str(tmp_path / "t.sqlite"), static_dir=None))
+
+def _demo_client(tmp_path):
+    p = str(tmp_path / "d.sqlite"); c = db.connect(p); db.init_schema(c); c.close()
+    return TestClient(create_app(p, demo=True))
+
+def test_locate_bad_request_no_params(tmp_path):
+    assert _client(tmp_path).get("/api/locate").json()["reason"] == "bad_request"
+
+def test_locate_bad_sha(tmp_path):
+    r = _client(tmp_path).get("/api/locate?sha256=xyz")
+    assert r.status_code == 400 and r.json()["reason"] == "bad_request"
+
+def test_locate_q_too_long(tmp_path):
+    r = _client(tmp_path).get("/api/locate?q=" + "a" * 201)
+    assert r.status_code == 400
+
+def test_locate_ref_too_long(tmp_path):                                 # ref 也须封顶 [M2]
+    r = _client(tmp_path).get("/api/locate?q=x&ref=" + "a" * 201)
+    assert r.status_code == 400 and r.json()["reason"] == "bad_request"
+
+def test_locate_cross_origin_forbidden(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr("combuddy.civitai.fetch_search", lambda *a, **k: calls.append(1) or ("ok", []))
+    r = _client(tmp_path).get("/api/locate?q=x", headers={"sec-fetch-site": "cross-site"})
+    assert r.status_code == 403 and r.json()["reason"] == "forbidden"
+    assert calls == []                                   # 守卫在网络之前
+
+def test_locate_same_origin_allowed(tmp_path, monkeypatch):
+    monkeypatch.setattr("combuddy.civitai.fetch_search", lambda *a, **k: ("ok", []))
+    r = _client(tmp_path).get("/api/locate?q=x", headers={"sec-fetch-site": "same-origin"})
+    assert r.status_code == 200
+
+def test_locate_online_disabled(tmp_path, monkeypatch):
+    p = str(tmp_path / "t.sqlite"); c = db.connect(p); db.init_schema(c)
+    config.set_settings(c, {"online_enrich": False}); c.close()
+    hcalls, scalls = [], []
+    monkeypatch.setattr("combuddy.civitai.lookup_by_hash", lambda *a: hcalls.append(1) or ("found", {}))
+    monkeypatch.setattr("combuddy.civitai.fetch_search", lambda *a, **k: scalls.append(1) or ("ok", []))
+    r = TestClient(create_app(p, static_dir=None)).get("/api/locate?q=x")
+    assert r.status_code == 409 and r.json()["reason"] == "online_disabled"
+    assert hcalls == [] and scalls == []                 # off → 零网络
+
+def test_locate_hash_found(tmp_path, monkeypatch):
+    ident = {"name": "Cool", "version_name": "v1", "base_model": "SDXL", "model_type": "LORA",
+             "civitai_url": "https://civitai.com/models/5?modelVersionId=9",
+             "image_url": "https://img/a.jpg", "trigger_words": "[]", "nsfw_level": 4}
+    monkeypatch.setattr("combuddy.civitai.lookup_by_hash", lambda s: ("found", ident))
+    r = _client(tmp_path).get("/api/locate?sha256=" + "a" * 64).json()
+    assert r["mode"] == "hash" and r["found"] is True
+    assert r["candidate"]["model_name"] == "Cool"
+    for leaked in ("image_url", "trigger_words", "nsfw_level"):          # 白名单剔尽,勿泄缩略图/触发词/分级 [M11]
+        assert leaked not in r["candidate"]
+
+def test_locate_hash_notfound_and_errors(tmp_path, monkeypatch):
+    monkeypatch.setattr("combuddy.civitai.lookup_by_hash", lambda s: ("notfound", None))
+    assert _client(tmp_path).get("/api/locate?sha256=" + "a" * 64).json() == {"mode": "hash", "found": False}
+    monkeypatch.setattr("combuddy.civitai.lookup_by_hash", lambda s: ("rate_limited", None))
+    assert _client(tmp_path).get("/api/locate?sha256=" + "a" * 64).status_code == 429
+    monkeypatch.setattr("combuddy.civitai.lookup_by_hash", lambda s: ("error", None))
+    assert _client(tmp_path).get("/api/locate?sha256=" + "a" * 64).status_code == 502
+
+def test_locate_name_maps_dir_type_and_normalizes(tmp_path, monkeypatch):
+    seen = {}
+    def fake(q, types=None, limit=20): seen["types"] = types; return ("ok", [
+        {"id": 1, "name": "M", "type": "LORA",
+         "modelVersions": [{"id": 2, "baseModel": "SDXL", "files": [{"name": "foo.safetensors", "sizeKB": 1.0, "type": "Model", "primary": True}]}]}])
+    monkeypatch.setattr("combuddy.civitai.fetch_search", fake)
+    r = _client(tmp_path).get("/api/locate?q=foo&ref=foo.safetensors&dir_type=loras").json()
+    assert seen["types"] == ["LORA", "LoCon", "DoRA"]     # dir_type→types 服务端映射
+    assert r["mode"] == "name" and r["candidates"][0]["file_match"] is True
+
+def test_locate_name_nofilter(tmp_path, monkeypatch):
+    seen = {}
+    monkeypatch.setattr("combuddy.civitai.fetch_search",
+                        lambda q, types=None, limit=20: seen.update(types=types) or ("ok", []))
+    _client(tmp_path).get("/api/locate?q=foo&dir_type=loras&nofilter=1")
+    assert seen["types"] is None                          # 逃生门去掉过滤
+
+def test_locate_name_rate_limited_and_error(tmp_path, monkeypatch):
+    monkeypatch.setattr("combuddy.civitai.fetch_search", lambda *a, **k: ("rate_limited", None))
+    assert _client(tmp_path).get("/api/locate?q=x").status_code == 429
+    monkeypatch.setattr("combuddy.civitai.fetch_search", lambda *a, **k: ("error", None))
+    assert _client(tmp_path).get("/api/locate?q=x").status_code == 502
+
+def test_locate_demo_is_canned_and_zero_network(tmp_path, monkeypatch):
+    hcalls, scalls = [], []
+    monkeypatch.setattr("combuddy.civitai.lookup_by_hash", lambda *a: hcalls.append(1) or ("found", {}))
+    monkeypatch.setattr("combuddy.civitai.fetch_search", lambda *a, **k: scalls.append(1) or ("ok", []))
+    cl = _demo_client(tmp_path)
+    h = cl.get("/api/locate?sha256=" + "a" * 64).json()
+    assert h["mode"] == "hash" and h["found"] is True and h["candidate"]["model_name"] == "Demo Aurora XL"
+    n = cl.get("/api/locate?q=aurora").json()
+    assert n["mode"] == "name" and len(n["candidates"]) == 2 and any(c["file_match"] for c in n["candidates"])
+    assert hcalls == [] and scalls == []                  # demo 零网络,两函数都没被调 [M9]
