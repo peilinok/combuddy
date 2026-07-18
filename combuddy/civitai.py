@@ -1,4 +1,4 @@
-import json, os, time, urllib.request, urllib.error, urllib.parse
+import hashlib, json, os, time, urllib.request, urllib.error, urllib.parse
 from . import norm
 
 _API = "https://civitai.com/api/v1/model-versions/by-hash/"
@@ -200,6 +200,50 @@ def lookup_by_hash(sha):
             return ("notfound", None)
         if e.code == 429:
             return ("rate_limited", None)
+        return ("error", None)
+    except Exception:
+        return ("error", None)
+
+class _NoAuthCrossHostRedirect(urllib.request.HTTPRedirectHandler):
+    """urllib 默认在 302 时把 Authorization 原样带到新域(bpo-33661)。Civitai downloadUrl
+    会 302 到异域 CDN(b2.civitai.com / *.r2.cloudflarestorage.com)——跨 host 必须剥 Authorization,
+    否则 Bearer key 泄漏给 CDN [B1]。sha 兜底管不住:key 在发请求那刻已泄漏。"""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None:
+            old_host = urllib.parse.urlparse(req.full_url).hostname
+            new_host = urllib.parse.urlparse(newurl).hostname
+            if old_host != new_host:
+                new.remove_header("Authorization")   # AbstractHTTPHandler 会把原 header 复制进 new
+        return new
+
+def _build_opener():
+    return urllib.request.build_opener(_NoAuthCrossHostRedirect())
+
+_DL_CHUNK = 1 << 20   # 1 MiB
+
+def download_file(url, dest_part, token, progress=None, should_cancel=None, max_bytes=None):
+    req = urllib.request.Request(url, headers={"User-Agent": _UA})
+    if token:
+        req.add_header("Authorization", f"Bearer {token}")   # header,不进 URL
+    h = hashlib.sha256(); done = 0
+    try:
+        with _build_opener().open(req, timeout=_TIMEOUT) as r, open(dest_part, "wb") as out:
+            total = int(r.getheader("Content-Length") or 0)
+            if progress: progress(0, total)
+            while True:
+                if should_cancel and should_cancel():
+                    return ("cancelled", None)
+                b = r.read(_DL_CHUNK)
+                if not b: break
+                out.write(b); h.update(b); done += len(b)
+                if max_bytes and done > max_bytes:
+                    return ("error", None)
+                if progress: progress(done, total)
+        return ("ok", h.hexdigest())          # hexdigest 恒小写
+    except urllib.error.HTTPError as e:
+        if e.code == 401: return ("auth", None)
+        if e.code == 403: return ("forbidden", None)
         return ("error", None)
     except Exception:
         return ("error", None)
