@@ -12,7 +12,7 @@
 [![PyPI](https://img.shields.io/pypi/v/combuddy)](https://pypi.org/project/combuddy/)
 [![Python](https://img.shields.io/pypi/pyversions/combuddy)](https://pypi.org/project/combuddy/)
 
-![combuddy dashboard](https://raw.githubusercontent.com/peilinok/combuddy/main/.github/images/hero-dashboard.png)
+![combuddy model library](https://raw.githubusercontent.com/peilinok/combuddy/main/.github/images/library.png)
 
 combuddy indexes your local ComfyUI model library and workflow files, then shows the dependency graph in a web UI. It helps answer practical questions: which workflows use this model, which models are missing for a workflow, what is safe to move to recoverable trash, and which duplicate files are wasting disk space.
 
@@ -73,11 +73,11 @@ Initial model and workflow counts should appear quickly. Full SHA-256 hashing ca
 
 See total model count, disk usage, base-architecture coverage, duplicate waste, and how much of your library is currently unreferenced.
 
+![dashboard](https://raw.githubusercontent.com/peilinok/combuddy/main/.github/images/hero-dashboard.png)
+
 ### Model Library
 
 Search and filter every indexed model. Open a model to see local metadata, optional Civitai identity, trigger words, cached preview images, and reverse dependencies: the workflows that reference that model.
-
-![library](https://raw.githubusercontent.com/peilinok/combuddy/main/.github/images/library.png)
 
 ### Workflow Resolution
 
