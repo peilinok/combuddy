@@ -307,6 +307,24 @@ def test_lookup_by_hash_no_download_when_no_file_matches(monkeypatch):
     _, ident = civitai.lookup_by_hash("a" * 64)
     assert ident.get("download") is None                            # 找不到匹配 file → 不带
 
+def test_lookup_by_hash_guards_null_sha256_in_file_match(monkeypatch):
+    """回归测试:hashes.SHA256 为 None 时不崩、不丢 identity [B2]"""
+    qsha = "a" * 64
+    payload = {"id": 9, "modelId": 5, "name": "v1", "baseModel": "SDXL",
+               "model": {"name": "Cool", "type": "LORA"}, "trainedWords": [], "images": [],
+               "files": [
+                   {"name": "vae.safetensors", "hashes": {"SHA256": None},
+                    "downloadUrl": "https://civitai.com/api/download/models/9?type=VAE"},
+                   {"name": "cool.safetensors", "hashes": {"SHA256": "A" * 64},
+                    "downloadUrl": "https://civitai.com/api/download/models/9", "sizeKB": 200.0}]}
+    monkeypatch.setattr(civitai.urllib.request, "urlopen",
+                        lambda req, timeout=None: _Resp(json.dumps(payload).encode()))
+    kind, ident = civitai.lookup_by_hash(qsha)
+    assert kind == "found"                                           # 不崩成 error
+    assert ident["download"]["filename"] == "cool.safetensors"       # 选对第二个 file（跳过 None SHA256）
+    assert ident["download"]["sha256"] == "a" * 64
+    assert ident["name"] == "Cool"                                   # identity 完整不丢
+
 def test_closed_loop_missing_then_placed_becomes_path(tmp_path):
     conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
     # 关断 hashing/enrich:resolve 在扫描第 2 相位、不需 sha,且永不联网 [M8]

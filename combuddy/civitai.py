@@ -210,7 +210,7 @@ def lookup_by_hash(sha):
         ident = parse_version(data)
         # hash 模式按 sha 选 file [H3]
         for f in (data.get("files") or []):
-            if (f.get("hashes") or {}).get("SHA256", "").lower() == sha:
+            if ((f.get("hashes") or {}).get("SHA256") or "").lower() == sha:
                 dl = _download_of(f)
                 if dl is not None:
                     ident["download"] = dl
