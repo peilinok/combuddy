@@ -127,6 +127,17 @@ def test_start_download_rejects_bad_sha(tmp_path, monkeypatch):
     rid, _ = _mroot(conn, tmp_path)
     assert download_service.start_download(conn, _spec(rid, sha256="xyz"))["error"] == "bad_request"
 
+def test_start_download_rejects_when_online_enrich_disabled(tmp_path, monkeypatch):
+    # 总闸:关掉 online_enrich 后下载必须整条链路零网络,同 /api/locate 的门控 [review Important I-1]
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    rid, _ = _mroot(conn, tmp_path)
+    config.set_settings(conn, {"online_enrich": False})
+    calls = []
+    monkeypatch.setattr(download_service.civitai, "download_file", lambda *a, **k: calls.append(1))
+    r = download_service.start_download(conn, _spec(rid))
+    assert r == {"error": "online_disabled"} and calls == []           # download_file 从未被调用
+    assert download_service.DOWNLOAD_STATUS["error"] == "online_disabled"
+
 def test_start_download_resets_cancel_at_start(tmp_path, monkeypatch):
     conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
     config.set_settings(conn, {"auto_hash": False, "online_enrich": False})   # 关断,避免真联网
@@ -150,7 +161,7 @@ def _st_bytes(header):   # 造 safetensors 字节(sha 可算)
 
 def test_download_success_imports_and_flips_edge(tmp_path, monkeypatch):
     conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
-    config.set_settings(conn, {"auto_hash": False, "online_enrich": False})   # 关断,避免真联网
+    config.set_settings(conn, {"auto_hash": False, "online_enrich": True})   # 门控要求 True [I-1];真联网靠 monkeypatch download_file 挡住
     root = tmp_path / "models"; (root / "loras").mkdir(parents=True)
     wf = tmp_path / "wf"; wf.mkdir()
     (wf / "w.json").write_text(_json.dumps({"nodes": [
@@ -194,10 +205,25 @@ def test_download_failure_paths_delete_part(tmp_path, monkeypatch):
         assert out["error"] == want                                    # 四失败路径分档 [M2]
         assert not (root / "loras" / "foo.safetensors.part").exists()  # 都删 .part
 
+def test_download_unexpected_exception_cleans_part_and_reports_network(tmp_path, monkeypatch):
+    # os.replace 等未预期异常不得向外传播、必须清 .part、写 DOWNLOAD_STATUS.error [review Important I-2]
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    rid, root = _mroot(conn, tmp_path)
+    def fake_dl(url, dest_part, token, **k):
+        open(dest_part, "wb").write(b"x"); return ("ok", "a" * 64)
+    monkeypatch.setattr(download_service.civitai, "download_file", fake_dl)
+    monkeypatch.setattr(download_service.os, "replace",
+                        lambda *a, **k: (_ for _ in ()).throw(OSError("disk gone")))
+    r = download_service.start_download(conn, _spec(rid))
+    assert r == {"error": "network"}                                   # 不传播,机器码 [I-2]
+    assert download_service.DOWNLOAD_STATUS["error"] == "network"
+    assert not (root / "loras" / "foo.safetensors.part").exists()      # .part 已清
+    assert not (root / "loras" / "foo.safetensors").exists()           # 未入库(rename 从未成功)
+
 def test_download_import_pending_when_scan_stays_busy(tmp_path, monkeypatch):
     """文件已下但 scan 持续忙、入库耗尽则返 import_pending、文件保留"""
     conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
-    config.set_settings(conn, {"auto_hash": False, "online_enrich": False})
+    config.set_settings(conn, {"auto_hash": False, "online_enrich": True})   # 门控要求 True [I-1]
     rid, root = _mroot(conn, tmp_path)
     def fake_dl(url, dest_part, token, **k):
         open(dest_part, "wb").write(b"x"); return ("ok", "a" * 64)

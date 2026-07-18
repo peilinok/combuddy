@@ -10,7 +10,7 @@ import { postScan, getRoots } from "../api";
 import { humanSize } from "../format";   // 候选文件大小复用既有 helper(吃 bytes,size_kb 需 ×1024) [H1]
 const { t } = useI18n();
 const { open, loading, mode, result, error, query, search, searchUnfiltered,
-        fallbackToName, siteSearchUrl, expectedPath, target, close } = useLocate();
+        fallbackToName, siteSearchUrl, expectedPath, target, close, fullBase } = useLocate();
 const { isDesktop, openExternal } = useDesktop();
 const { scanning, stats } = useScanStatus();
 const { demo } = useDemo();
@@ -46,9 +46,10 @@ const hasDownloadable = computed(() =>
   (mode.value === "name" && candidates.value.some((c: any) => c.download)));
 function keyMissing() { return stats.value.civitai_api_key_set === false; }
 function isActive(c: any) {
-  // 全局单槽位:仅当前候选的 download.filename 与 DOWNLOAD_STATUS 一致才画进度,防挂错行 [M7]
-  const d = c?.download, s = stats.value.download;
-  return !!(d && s?.running && s?.filename === d.filename);
+  // 全局单槽位:用 target.ref_string 的基名(而非 Civitai 的 c.download.filename)与 DOWNLOAD_STATUS.filename
+  // 比对——后端落盘名来自 ref_string,几乎从不等于 Civitai 文件名,原写法导致进度条几乎不显示 [review Important I-3]
+  const s = stats.value.download;
+  return !!(c?.download && target.value && s?.running && s?.filename === fullBase(target.value.ref_string));
 }
 function canDownload(c: any) {
   return !!c?.download && !!target.value?.dir_type && effectiveRootId.value != null

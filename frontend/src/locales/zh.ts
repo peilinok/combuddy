@@ -83,7 +83,7 @@ export default {
     err_forbidden: "下载被拒绝，可能是权限限制或临时故障，请稍后重试", err_sha_mismatch: "下载校验不符，已丢弃",
     err_path_unsafe: "目标路径不安全", err_root_not_found: "下载目标目录不存在或已禁用", err_exists: "目标文件已存在",
     err_already_running: "已有下载进行中", err_network: "无法连接，请稍后重试", err_cancelled: "已取消",
-    err_import_pending: "已下载，扫描忙碌，稍后重扫可见",
+    err_import_pending: "已下载，扫描忙碌，稍后重扫可见", err_online_disabled: "联网识别已关闭，去设置开启",
   },
   cleanup: {
     title: "清理中心", unreferencedModels: "未被引用的模型", countUnused: "{n} 个 · 没有任何 workflow 使用它们",

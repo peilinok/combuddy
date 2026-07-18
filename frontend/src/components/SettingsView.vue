@@ -75,7 +75,7 @@ async function onAddRoot() {
         <div class="text-sm mb-1">{{ t("download.keyLabel") }}</div>
         <div class="text-color-secondary text-xs mb-2">{{ t("download.keyHint") }}</div>
         <div v-if="!settings.civitai_api_key_set || editingApiKey" class="flex gap-2">
-          <input v-model="apiKeyInput" type="password" :placeholder="t('download.keyLabel')"
+          <input v-model="apiKeyInput" type="password" autocomplete="new-password" :placeholder="t('download.keyLabel')"
             class="flex-1 text-sm bg-surface-hover rounded px-2 py-1 outline-none" />
           <Button :label="t('download.keySave')" :disabled="!apiKeyInput" @click="onSaveApiKey" />
         </div>

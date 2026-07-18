@@ -1,5 +1,6 @@
 import { ref } from "vue";
 import { fetchLocate } from "./api";
+import { resetError as resetDownloadError } from "./useDownload";
 
 // 模块级单例(仿 useManifest):LocateDialog.vue 与 WorkflowView.vue 共享同一份对话框状态。
 // locate 对话框内无 in-app 导航(点候选走外链、不切 view),故不重蹈 manifest H8。
@@ -12,7 +13,7 @@ export const query = ref("");
 export const target = ref<{ ref_string: string; dir_type?: string; sha256?: string } | null>(null);
 
 const norm = (s: string) => s.replaceAll("\\", "/");
-const fullBase = (rs: string) => norm(rs).split("/").pop() ?? rs;
+export const fullBase = (rs: string) => norm(rs).split("/").pop() ?? rs;
 function stem(rs: string): string {
   const b = fullBase(rs);
   const dot = b.lastIndexOf(".");
@@ -36,6 +37,7 @@ async function run(params: Record<string, string>) {
 export async function openFor(t: { ref_string: string; dir_type?: string; sha256?: string }) {
   target.value = t; query.value = stem(t.ref_string);
   mode.value = null; result.value = null; error.value = null; open.value = true;
+  resetDownloadError();   // 清上一个 target 残留的下载失败提示,防串扰 [review Important I-4]
   if (t.sha256) { mode.value = "hash"; await run({ sha256: t.sha256 }); }
   // 无 sha:不自动搜,停待搜索态 [H3]
 }
@@ -58,5 +60,5 @@ export function close() { open.value = false; }
 
 export function useLocate() {
   return { open, loading, mode, result, error, query, target,
-           openFor, search, searchUnfiltered, fallbackToName, siteSearchUrl, expectedPath, close };
+           openFor, search, searchUnfiltered, fallbackToName, siteSearchUrl, expectedPath, fullBase, close };
 }

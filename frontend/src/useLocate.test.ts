@@ -43,6 +43,16 @@ describe("openFor", () => {
     expect(api.fetchLocate).toHaveBeenCalledWith({ sha256: "a".repeat(64) });
     expect(L.mode.value).toBe("hash");
   });
+  it("切换 target 时清空上一个 target 残留的下载失败提示 [review Important I-4]", async () => {
+    const { useDownload } = await import("./useDownload");
+    const { stats } = await import("./useScanStatus");
+    const Dl = useDownload();
+    Dl.error.value = null;
+    stats.value = { ...stats.value, download: { running: false, error: "disk_full", revision: 9 } };
+    expect(Dl.downloadError.value).toBe("disk_full");            // target A 的下载失败仍在展示
+    await L.openFor({ ref_string: "bar.safetensors", dir_type: "loras" });   // 切到新 target B
+    expect(Dl.downloadError.value).toBeNull();                   // B 的对话框不该带着 A 的失败码
+  });
 });
 
 describe("search", () => {

@@ -24,3 +24,14 @@ it("downloadError 从 stats.download.error 派生（后台失败）[B2]", async 
   stats.value = { ...stats.value, download: { running: false, error: "sha_mismatch" } };
   expect(D.downloadError.value).toBe("sha_mismatch");
 });
+it("resetError 清同步错误、并压制上一轮残留的后台失败码 [I-4]", async () => {
+  const { stats } = await import("./useScanStatus");
+  D.error.value = "already_running";
+  stats.value = { ...stats.value, download: { running: false, error: "disk_full", revision: 5 } };
+  expect(D.downloadError.value).toBe("already_running");   // 同步错误优先展示
+  D.resetError();
+  expect(D.error.value).toBeNull();
+  expect(D.downloadError.value).toBeNull();                // 同步错误清了,旧后台失败码(revision 未变)也被压制
+  stats.value = { ...stats.value, download: { running: false, error: "sha_mismatch", revision: 6 } };
+  expect(D.downloadError.value).toBe("sha_mismatch");      // revision 变了→ 新一轮失败,照常展示
+});
