@@ -209,3 +209,55 @@ def test_download_import_pending_when_scan_stays_busy(tmp_path, monkeypatch):
     assert r == {"error": "import_pending"}                            # 报可区分状态
     assert (root / "loras" / "foo.safetensors").exists()               # 文件保留、未被删 [闭环重要]
     assert not (root / "loras" / "foo.safetensors.part").exists()      # .part 消
+
+from fastapi.testclient import TestClient
+from combuddy.api import create_app
+
+def _client(tmp_path):
+    return TestClient(create_app(str(tmp_path / "t.sqlite"), static_dir=None))
+
+def test_settings_never_returns_key_plaintext(tmp_path):
+    cl = _client(tmp_path)
+    post = cl.post("/api/settings", json={"civitai_api_key": "sk-secret"})
+    assert "civitai_api_key" not in post.json() and post.json()["civitai_api_key_set"] is True   # POST 不回明文 [B2]
+    get = cl.get("/api/settings")
+    assert "civitai_api_key" not in get.json() and get.json()["civitai_api_key_set"] is True      # GET 不回明文 [B2]
+
+def test_download_cross_origin_guard(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr("combuddy.download_service.start_download", lambda *a, **k: calls.append(1))
+    r = _client(tmp_path).post("/api/download", json=_spec(1), headers={"sec-fetch-site": "cross-site"})
+    assert r.status_code == 403 and calls == []                       # 跨源守卫 [B4]
+
+def test_download_demo_noop_zero_network(tmp_path, monkeypatch):
+    p = str(tmp_path / "d.sqlite"); c = db.connect(p); db.init_schema(c)
+    config.set_settings(c, {"civitai_api_key": "sk-fake"}); c.close()   # 即便配了 key
+    calls = []
+    monkeypatch.setattr("combuddy.civitai.download_file", lambda *a, **k: calls.append(1))
+    r = TestClient(create_app(p, demo=True)).post("/api/download", json=_spec(1))
+    assert r.json() == {"started": False, "demo": True} and calls == []   # demo no-op 零网络 [L4]
+
+def test_stats_exposes_download_and_key_set(tmp_path):
+    s = _client(tmp_path).get("/api/stats").json()
+    assert "download" in s and s["civitai_api_key_set"] is False
+
+def test_hash_candidate_carries_download():
+    from combuddy.api import _hash_candidate
+    ident = {"name": "M", "version_name": "v", "model_type": "LORA", "base_model": "SDXL",
+             "civitai_url": "https://civitai.com/models/5",
+             "download": {"url": "https://civitai.com/api/download/models/9", "filename": "m.safetensors",
+                          "size_kb": 1.0, "sha256": "a" * 64}}
+    assert _hash_candidate(ident)["download"]["filename"] == "m.safetensors"   # download 透传
+
+def test_download_already_running_409(tmp_path):
+    download_service.DOWNLOAD_STATUS["running"] = True                 # 实现有分支、须有测试驱动 [M1]
+    try:
+        r = _client(tmp_path).post("/api/download", json=_spec(1))
+        assert r.status_code == 409 and r.json()["reason"] == "already_running"
+    finally:
+        download_service.DOWNLOAD_STATUS["running"] = False
+
+def test_settings_post_cross_origin_guard(tmp_path):                   # 凭证写入口防 CSRF [H1]
+    r = _client(tmp_path).post("/api/settings", json={"civitai_api_key": "x"},
+                               headers={"sec-fetch-site": "cross-site"})
+    assert r.status_code == 403
