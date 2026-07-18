@@ -75,6 +75,16 @@ export default {
     err_rate_limited: "Too many Civitai requests, try again shortly",
     err_civitai_unreachable: "Can't reach Civitai, try again later", err_unknown: "Something went wrong",
   },
+  download: {
+    cta: "Download", downloading: "Downloading…", cancel: "Cancel", badge: "Downloading {progress}%", selectRoot: "Select download destination",
+    keyLabel: "Civitai API Key", keyHint: "For downloads only; online identification doesn't need this", keyConfigured: "Configured", keyChange: "Change", keyClear: "Clear", keySave: "Save",
+    err_bad_request: "Bad request", err_bad_url: "Invalid URL", err_disk_full: "Disk full",
+    err_auth: "Invalid Civitai key or model requires login/subscription", err_authNoKey: "Sign-in required — set up your Civitai key in Settings",
+    err_forbidden: "Download denied — permission restriction or temporary failure, try again later", err_sha_mismatch: "Checksum mismatch, discarded",
+    err_path_unsafe: "Unsafe target path", err_root_not_found: "Download root not found or disabled", err_exists: "Target file already exists",
+    err_already_running: "Download already in progress", err_network: "Connection failed, try again later", err_cancelled: "Cancelled",
+    err_import_pending: "Downloaded, scan busy — rescan to see it",
+  },
   cleanup: {
     title: "Cleanup Center", unreferencedModels: "Unreferenced Models", countUnused: "{n} · not used by any workflow",
     reclaimable: "Reclaimable", selectedSummary: "{n} selected · {size} · all 0 refs, safe to remove", confirm: "Move {n} file(s) ({size}) to the recoverable trash?", moveToTrash: "Move to Trash",
