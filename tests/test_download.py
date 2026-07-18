@@ -71,3 +71,66 @@ def test_download_max_bytes_guard(monkeypatch, tmp_path):
                         lambda: _FakeOpener(_Resp(b"X" * 5000, {"Content-Length": "100"})))
     assert civitai.download_file("https://civitai.com/x", str(tmp_path / "p.part"), "t",
                                  max_bytes=1000)[0] == "error"
+
+from combuddy import download_service, config, db, scanner
+import struct, json as _json
+
+def _mroot(conn, tmp_path):
+    root = tmp_path / "models"; (root / "loras").mkdir(parents=True)
+    rid = config.set_roots(conn, [{"kind": "model", "path": str(root)}]);
+    return conn.execute("SELECT id FROM roots WHERE kind='model'").fetchone()["id"], root
+
+def _spec(root_id, **kw):
+    base = {"url": "https://civitai.com/api/download/models/9", "sha256": "a" * 64,
+            "size_kb": 1.0, "dir_type": "loras", "ref_string": "foo.safetensors", "root_id": root_id}
+    base.update(kw); return base
+
+def test_start_download_rejects_path_traversal(tmp_path, monkeypatch):
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    rid, _ = _mroot(conn, tmp_path)
+    monkeypatch.setattr(download_service.civitai, "download_file", lambda *a, **k: ("ok", "a" * 64))
+    r = download_service.start_download(conn, _spec(rid, ref_string="../../etc/passwd"))
+    assert r["error"] == "path_unsafe" and download_service.DOWNLOAD_STATUS["error"] == "path_unsafe"
+
+def test_start_download_rejects_prefix_collision(tmp_path, monkeypatch):
+    # root=/x/models,ref 让 dest 落到 /x/models-evil → startswith 会漏,commonpath 挡住 [H4]
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    (tmp_path / "models").mkdir(); (tmp_path / "models" / "loras").mkdir()
+    (tmp_path / "models-evil").mkdir()
+    config.set_roots(conn, [{"kind": "model", "path": str(tmp_path / "models")}])
+    rid = conn.execute("SELECT id FROM roots").fetchone()["id"]
+    monkeypatch.setattr(download_service.civitai, "download_file", lambda *a, **k: ("ok", "a" * 64))
+    r = download_service.start_download(conn, _spec(rid, dir_type="loras", ref_string="../../models-evil/x.safetensors"))
+    assert r["error"] == "path_unsafe"
+
+def test_start_download_rejects_bad_url_and_dir_type(tmp_path, monkeypatch):
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    rid, _ = _mroot(conn, tmp_path)
+    monkeypatch.setattr(download_service.civitai, "download_file", lambda *a, **k: ("ok", "a" * 64))
+    assert download_service.start_download(conn, _spec(rid, url="https://evil.tld/x"))["error"] == "bad_url"
+    assert download_service.start_download(conn, _spec(rid, dir_type="../evil"))["error"] == "path_unsafe"
+
+def test_start_download_root_not_found_and_exists_and_disk(tmp_path, monkeypatch):
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    rid, root = _mroot(conn, tmp_path)
+    monkeypatch.setattr(download_service.civitai, "download_file", lambda *a, **k: ("ok", "a" * 64))
+    assert download_service.start_download(conn, _spec(9999))["error"] == "root_not_found"
+    (root / "loras" / "foo.safetensors").write_bytes(b"x")           # 已存在
+    assert download_service.start_download(conn, _spec(rid))["error"] == "exists"
+    (root / "loras" / "foo.safetensors").unlink()
+    monkeypatch.setattr(download_service.shutil, "disk_usage",
+                        lambda p: type("U", (), {"free": 0})())        # free=0
+    assert download_service.start_download(conn, _spec(rid, size_kb=1000.0))["error"] == "disk_full"
+
+def test_start_download_rejects_bad_sha(tmp_path, monkeypatch):
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    rid, _ = _mroot(conn, tmp_path)
+    assert download_service.start_download(conn, _spec(rid, sha256="xyz"))["error"] == "bad_request"
+
+def test_start_download_resets_cancel_at_start(tmp_path, monkeypatch):
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    rid, _ = _mroot(conn, tmp_path)
+    download_service.DOWNLOAD_STATUS["cancel"] = True                 # 上次遗留
+    monkeypatch.setattr(download_service.civitai, "download_file", lambda *a, **k: ("ok", "a" * 64))
+    download_service.start_download(conn, _spec(rid))
+    assert download_service.DOWNLOAD_STATUS["cancel"] is False        # 起点复位 [H9]
