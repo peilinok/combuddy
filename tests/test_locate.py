@@ -273,6 +273,40 @@ from combuddy import scan_service, queries
 def _st(p, header):   # 造最小 safetensors:8 字节长度 + JSON 头
     blob = json.dumps(header).encode(); p.write_bytes(struct.pack("<Q", len(blob)) + blob)
 
+def test_normalize_adds_download_with_lowercased_sha():
+    item = {"id": 5, "name": "M", "type": "LORA", "modelVersions": [{"id": 9, "baseModel": "SDXL",
+        "files": [{"name": "m.safetensors", "sizeKB": 100.0, "type": "Model", "primary": True,
+                   "downloadUrl": "https://civitai.com/api/download/models/9",
+                   "hashes": {"SHA256": "ABCDEF" + "0" * 58}}]}]}   # Civitai 大写
+    c = civitai.normalize_search([item], "m.safetensors")[0]
+    assert c["download"]["url"] == "https://civitai.com/api/download/models/9"
+    assert c["download"]["sha256"] == ("abcdef" + "0" * 58)          # 已 lower [B3]
+    assert c["download"]["filename"] == "m.safetensors" and c["download"]["size_kb"] == 100.0
+
+def test_lookup_by_hash_picks_file_matching_query_sha(monkeypatch):
+    qsha = "a" * 64
+    payload = {"id": 9, "modelId": 5, "name": "v1", "baseModel": "SDXL",
+               "model": {"name": "Cool", "type": "LORA"}, "trainedWords": [], "images": [],
+               "files": [
+                   {"name": "vae.safetensors", "hashes": {"SHA256": "B" * 64},
+                    "downloadUrl": "https://civitai.com/api/download/models/9?type=VAE"},
+                   {"name": "cool.safetensors", "hashes": {"SHA256": "A" * 64},
+                    "downloadUrl": "https://civitai.com/api/download/models/9", "sizeKB": 200.0}]}
+    monkeypatch.setattr(civitai.urllib.request, "urlopen",
+                        lambda req, timeout=None: _Resp(json.dumps(payload).encode()))
+    kind, ident = civitai.lookup_by_hash(qsha)
+    assert ident["download"]["filename"] == "cool.safetensors"       # 按查询 sha 选对 file [H3]
+    assert ident["download"]["sha256"] == "a" * 64
+
+def test_lookup_by_hash_no_download_when_no_file_matches(monkeypatch):
+    payload = {"id": 9, "modelId": 5, "name": "v1", "baseModel": "SDXL",
+               "model": {"name": "Cool", "type": "LORA"}, "trainedWords": [], "images": [],
+               "files": [{"name": "other.safetensors", "hashes": {"SHA256": "C" * 64}}]}
+    monkeypatch.setattr(civitai.urllib.request, "urlopen",
+                        lambda req, timeout=None: _Resp(json.dumps(payload).encode()))
+    _, ident = civitai.lookup_by_hash("a" * 64)
+    assert ident.get("download") is None                            # 找不到匹配 file → 不带
+
 def test_closed_loop_missing_then_placed_becomes_path(tmp_path):
     conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
     # 关断 hashing/enrich:resolve 在扫描第 2 相位、不需 sha,且永不联网 [M8]

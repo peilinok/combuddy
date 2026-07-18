@@ -120,6 +120,15 @@ def enrich_models(conn, progress=None, should_cancel=None, fetch=fetch_by_hash, 
 def _int_id(x) -> bool:
     return isinstance(x, int) and not isinstance(x, bool)   # bool 是 int 子类,须排除 [L4]
 
+def _download_of(file: dict) -> dict | None:
+    """从一个 Civitai file 造 download 对象;url 必须 civitai.com、sha 存在才带。"""
+    url = file.get("downloadUrl")
+    sha = (file.get("hashes") or {}).get("SHA256")
+    if not (isinstance(url, str) and url.startswith("https://civitai.com/") and sha):
+        return None
+    return {"url": url, "filename": file.get("name"),
+            "size_kb": file.get("sizeKB"), "sha256": sha.lower()}   # Civitai 大写 → lower [B3]
+
 def _pick_file(files: list) -> dict | None:
     """展示文件:primary 优先 → 首个 type=='Model' → 首个。"""
     for f in files:
@@ -156,7 +165,7 @@ def normalize_search(items: list, ref_name, limit: int = 5) -> list:
         f = _pick_file(chosen.get("files") or [])
         if f is None:
             continue
-        out.append({
+        candidate = {
             "model_name": item.get("name"),
             "version_name": chosen.get("name"),
             "model_type": item.get("type"),
@@ -164,7 +173,11 @@ def normalize_search(items: list, ref_name, limit: int = 5) -> list:
             "civitai_url": f"https://civitai.com/models/{mid}?modelVersionId={vid}",
             "file": {"name": f.get("name"), "size_kb": f.get("sizeKB")},
             "file_match": matched,
-        })
+        }
+        dl = _download_of(f)
+        if dl is not None:
+            candidate["download"] = dl
+        out.append(candidate)
     out.sort(key=lambda c: not c["file_match"])   # file_match 优先,稳定排序保留组内原序
     return out[:limit]
 
@@ -194,7 +207,15 @@ def lookup_by_hash(sha):
     try:
         with urllib.request.urlopen(req, timeout=_TIMEOUT) as r:
             data = json.loads(r.read().decode())
-        return ("found", parse_version(data))
+        ident = parse_version(data)
+        # hash 模式按 sha 选 file [H3]
+        for f in (data.get("files") or []):
+            if (f.get("hashes") or {}).get("SHA256", "").lower() == sha:
+                dl = _download_of(f)
+                if dl is not None:
+                    ident["download"] = dl
+                break
+        return ("found", ident)
     except urllib.error.HTTPError as e:
         if e.code == 404:
             return ("notfound", None)
