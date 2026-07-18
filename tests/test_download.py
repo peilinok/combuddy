@@ -129,6 +129,7 @@ def test_start_download_rejects_bad_sha(tmp_path, monkeypatch):
 
 def test_start_download_resets_cancel_at_start(tmp_path, monkeypatch):
     conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    config.set_settings(conn, {"auto_hash": False, "online_enrich": False})   # 关断,避免真联网
     rid, _ = _mroot(conn, tmp_path)
     download_service.DOWNLOAD_STATUS["cancel"] = True                 # 上次遗留
     def _dl(url, dest_part, token, **k): open(dest_part, "wb").write(b"x"); return ("ok", "a" * 64)
@@ -192,3 +193,19 @@ def test_download_failure_paths_delete_part(tmp_path, monkeypatch):
         out = download_service.start_download(conn, _spec(rid))
         assert out["error"] == want                                    # 四失败路径分档 [M2]
         assert not (root / "loras" / "foo.safetensors.part").exists()  # 都删 .part
+
+def test_download_import_pending_when_scan_stays_busy(tmp_path, monkeypatch):
+    """文件已下但 scan 持续忙、入库耗尽则返 import_pending、文件保留"""
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    config.set_settings(conn, {"auto_hash": False, "online_enrich": False})
+    rid, root = _mroot(conn, tmp_path)
+    def fake_dl(url, dest_part, token, **k):
+        open(dest_part, "wb").write(b"x"); return ("ok", "a" * 64)
+    monkeypatch.setattr(download_service.civitai, "download_file", fake_dl)
+    monkeypatch.setattr(download_service.scan_service, "run_scan",
+                        lambda conn: {"skipped": "busy"})              # run_scan 恒返回 skipped
+    download_service.scan_service.STATUS["running"] = False            # 轮询快速耗尽
+    r = download_service.start_download(conn, _spec(rid))
+    assert r == {"error": "import_pending"}                            # 报可区分状态
+    assert (root / "loras" / "foo.safetensors").exists()               # 文件保留、未被删 [闭环重要]
+    assert not (root / "loras" / "foo.safetensors.part").exists()      # .part 消

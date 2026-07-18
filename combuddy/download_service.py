@@ -72,7 +72,8 @@ def _download_and_import(conn, spec, dest, sha, size):
     conn.execute("UPDATE models SET sha256=? WHERE path=?", (sha, dest))  # 若已存行(极少);正常靠 run_scan
     conn.commit()
     DOWNLOAD_STATUS["phase"] = "importing"
-    _ensure_scanned(conn)                                      # 轮询确保 run_scan 跑完一次 [H1]
+    if not _ensure_scanned(conn):                               # 轮询确保 run_scan 跑完一次 [H1];耗尽则报 import_pending
+        return _fail("import_pending")                          # 文件已下但入库未成(scan 持续忙),不删文件、报可区分状态
     conn.execute("UPDATE models SET sha256=? WHERE path=?", (sha, dest))  # scan 插行后写回已验证 sha [M2]
     conn.commit()
     return {"ok": True}
@@ -85,7 +86,8 @@ def _ensure_scanned(conn, tries=60):
     # run_scan single-flight:若 scan 在跑则 skip;轮询等它落下再重试,确保文件真入库 [H1]
     for _ in range(tries):
         if not scan_service.run_scan(conn).get("skipped"):
-            return
+            return True                      # 真跑完一次入库
         deadline = time.monotonic() + 5
         while scan_service.STATUS["running"] and time.monotonic() < deadline:
             time.sleep(0.05)
+    return False                             # 耗尽,入库未成
