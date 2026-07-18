@@ -76,6 +76,10 @@ def get_settings(conn: sqlite3.Connection) -> dict:
         "nsfw_blur_threshold": int(have.get("nsfw_blur_threshold", "1")),
     }
 
+def get_api_key(conn: sqlite3.Connection) -> str:
+    r = conn.execute("SELECT value FROM meta WHERE key='civitai_api_key'").fetchone()
+    return r["value"] if r else ""
+
 def set_settings(conn: sqlite3.Connection, values: dict) -> None:
     if "auto_hash" in values:
         conn.execute("INSERT OR REPLACE INTO meta(key,value) VALUES('auto_hash',?)",
@@ -92,4 +96,8 @@ def set_settings(conn: sqlite3.Connection, values: dict) -> None:
     if "nsfw_blur_threshold" in values:
         t = max(0, min(int(values["nsfw_blur_threshold"]), 32))
         conn.execute("INSERT OR REPLACE INTO meta(key,value) VALUES('nsfw_blur_threshold',?)", (str(t),))
+    if "civitai_api_key" in values:
+        v = values["civitai_api_key"]
+        conn.execute("INSERT OR REPLACE INTO meta(key,value) VALUES('civitai_api_key',?)",
+                     (v if isinstance(v, str) else "",))
     conn.commit()
