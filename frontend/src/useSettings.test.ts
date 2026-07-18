@@ -193,4 +193,12 @@ describe("useSettings", () => {
     await loading;
     expect(s.roots.value.map((r: any) => r.path)).toEqual(["/old", "/new"]);
   });
+  it("saveApiKey 不把明文合并进 settings.value [M9]", async () => {
+    const api = await import("./api");
+    (api.setSettings as any).mockResolvedValue({ civitai_api_key_set: true });
+    const s = useSettings();
+    await s.saveApiKey("sk-secret");
+    expect(JSON.stringify(s.settings.value)).not.toContain("sk-secret");
+    expect(api.setSettings).toHaveBeenCalledWith({ civitai_api_key: "sk-secret" });
+  });
 });
