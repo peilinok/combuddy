@@ -8,13 +8,24 @@ import { setLocale } from "../i18n";
 import ThemePicker from "./ThemePicker.vue";
 import DetectPanel from "./DetectPanel.vue";
 const { t, locale } = useI18n();
-const { settings, roots, error, saveState, addResult, load, save, addRoot, removeRoot } = useSettings();
+const { settings, roots, error, saveState, addResult, load, save, addRoot, removeRoot, saveApiKey } = useSettings();
 const { load: loadDetect } = useDetect();
 const { isDesktop, pickFolder } = useDesktop();
 const newKind = ref("model");
 const newPath = ref("");
 const showDetect = ref(false);
+const apiKeyInput = ref("");
+const editingApiKey = ref(false);
 onMounted(load);
+async function onSaveApiKey() {
+  if (!apiKeyInput.value) return;
+  await saveApiKey(apiKeyInput.value);
+  if (!error.value) { apiKeyInput.value = ""; editingApiKey.value = false; }
+}
+async function onClearApiKey() {
+  await saveApiKey("");
+  if (!error.value) editingApiKey.value = false;
+}
 async function onRemoveRoot(r: any) {
   if (!window.confirm(t("settings.removeConfirm", { path: r.path }))) return;
   await removeRoot(r.id);
@@ -58,8 +69,22 @@ async function onAddRoot() {
       <div class="flex items-center justify-between mb-3">
         <span>{{ t("settings.onlineEnrich") }}</span>
         <InputSwitch :modelValue="settings.online_enrich" @update:modelValue="save({ online_enrich: $event })" /></div>
-      <div><div class="flex justify-between text-sm mb-1"><span>{{ t("settings.nsfwThreshold") }}</span><span class="text-color-secondary">{{ settings.nsfw_blur_threshold }}</span></div>
+      <div class="mb-3"><div class="flex justify-between text-sm mb-1"><span>{{ t("settings.nsfwThreshold") }}</span><span class="text-color-secondary">{{ settings.nsfw_blur_threshold }}</span></div>
         <Slider :modelValue="settings.nsfw_blur_threshold" :min="0" :max="32" @change="save({ nsfw_blur_threshold: $event.value })" /></div>
+      <div class="pt-3 border-t border-surface-border">
+        <div class="text-sm mb-1">{{ t("download.keyLabel") }}</div>
+        <div class="text-color-secondary text-xs mb-2">{{ t("download.keyHint") }}</div>
+        <div v-if="!settings.civitai_api_key_set || editingApiKey" class="flex gap-2">
+          <input v-model="apiKeyInput" type="password" autocomplete="new-password" :placeholder="t('download.keyLabel')"
+            class="flex-1 text-sm bg-surface-hover rounded px-2 py-1 outline-none" />
+          <Button :label="t('download.keySave')" :disabled="!apiKeyInput" @click="onSaveApiKey" />
+        </div>
+        <div v-else class="flex items-center gap-3 text-sm">
+          <span class="text-color-secondary">{{ t("download.keyConfigured") }} ✓</span>
+          <button @click="editingApiKey = true" class="text-primary text-xs hover:underline">{{ t("download.keyChange") }}</button>
+          <button @click="onClearApiKey" class="text-primary text-xs hover:underline">{{ t("download.keyClear") }}</button>
+        </div>
+      </div>
     </Panel>
     <Panel :header="t('settings.roots')">
       <div v-for="r in roots" :key="r.id ?? r.path" class="flex justify-between items-center text-sm py-1 border-b border-surface-border last:border-0">

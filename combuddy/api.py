@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
-from . import db as dbm, config, stats, scan_service, queries, trash, detect, manifest, civitai
+from . import db as dbm, config, stats, scan_service, queries, trash, detect, manifest, civitai, download_service
 
 # Windows 常把注册表 .js 的 Content Type 设成 text/plain,StaticFiles 据此对打包好的
 # 前端 JS 返回 text/plain,而浏览器/WebView2 以严格 MIME 拒绝执行 <script type="module">,
@@ -29,7 +29,7 @@ def _hash_candidate(ident: dict) -> dict:
     # 白名单挑字段:剔除 image_url/trigger_words/nsfw_level(隐私:不返回缩略图),remap name→model_name [M11]
     return {"model_name": ident.get("name"), "version_name": ident.get("version_name"),
             "model_type": ident.get("model_type"), "base_model": ident.get("base_model"),
-            "civitai_url": ident.get("civitai_url")}
+            "civitai_url": ident.get("civitai_url"), "download": ident.get("download")}   # [H2]
 
 def _demo_locate(sha256: str, q: str):
     if sha256:
@@ -46,6 +46,8 @@ def _demo_locate(sha256: str, q: str):
              "file": {"name": "nebula.safetensors", "size_kb": 2100000.0}, "file_match": False}]}
     return JSONResponse({"reason": "bad_request"}, status_code=400)
 
+def _demo_download(): return {"started": False, "demo": True}
+
 def create_app(db_path: str, static_dir: str | None = None, demo: bool = False,
                desktop_state: dict | None = None) -> FastAPI:
     app = FastAPI(title="combuddy")
@@ -61,6 +63,8 @@ def create_app(db_path: str, static_dir: str | None = None, demo: bool = False,
         s["scanning"] = status["running"]
         s["scan"] = status
         s["demo"] = demo
+        s["download"] = dict(download_service.DOWNLOAD_STATUS)
+        s["civitai_api_key_set"] = config.get_api_key(c) != ""
         s["desktop"] = desktop_state is not None
         if desktop_state and desktop_state.get("update"):
             s["update"] = desktop_state["update"]
@@ -119,15 +123,38 @@ def create_app(db_path: str, static_dir: str | None = None, demo: bool = False,
         scan_service.STATUS["cancel"] = True
         return {"ok": True}
 
+    @app.post("/api/download")
+    def post_download(request: Request, body: dict):
+        if demo:                                                      # 首行短路 [L4]
+            return _demo_download()
+        if request.headers.get("sec-fetch-site") not in (None, "same-origin", "none"):
+            return JSONResponse({"reason": "forbidden"}, status_code=403)   # [B4]
+        if download_service.DOWNLOAD_STATUS["running"]:
+            return JSONResponse({"reason": "already_running"}, status_code=409)
+        def _bg():
+            c = conn()
+            try: download_service.start_download(c, body or {})
+            finally: c.close()
+        threading.Thread(target=_bg, daemon=True).start()             # 线程在 api.py [H8]
+        return {"started": True}
+
+    @app.post("/api/download/cancel")
+    def post_download_cancel(request: Request):
+        if request.headers.get("sec-fetch-site") not in (None, "same-origin", "none"):
+            return JSONResponse({"reason": "forbidden"}, status_code=403)
+        download_service.DOWNLOAD_STATUS["cancel"] = True
+        return {"ok": True}
+
+    def _settings_masked(c):
+        s = config.get_settings(c); s["civitai_api_key_set"] = config.get_api_key(c) != ""; return s
     @app.get("/api/settings")
     def get_settings():
-        c = conn(); s = config.get_settings(c); c.close()
-        return s
-
+        c = conn(); s = _settings_masked(c); c.close(); return s
     @app.post("/api/settings")
-    def post_settings(body: dict):
-        c = conn(); config.set_settings(c, body or {}); s = config.get_settings(c); c.close()
-        return s
+    def post_settings(request: Request, body: dict):
+        if request.headers.get("sec-fetch-site") not in (None, "same-origin", "none"):
+            return JSONResponse({"reason": "forbidden"}, status_code=403)   # 凭证写入口,防 CSRF 覆写 key [H1]
+        c = conn(); config.set_settings(c, body or {}); s = _settings_masked(c); c.close(); return s
 
     @app.get("/api/models")
     def api_models(search: str = "", type: str = "", flag: str = ""):

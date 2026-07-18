@@ -75,6 +75,16 @@ export default {
     err_rate_limited: "Civitai 请求过于频繁，请稍后重试",
     err_civitai_unreachable: "无法连接 Civitai，请稍后重试", err_unknown: "出错了，请稍后重试",
   },
+  download: {
+    cta: "下载", downloading: "下载中…", cancel: "取消", badge: "下载中 {progress}%", selectRoot: "选择下载目标目录",
+    keyLabel: "Civitai API Key", keyHint: "仅用于下载，联网识别不需要", keyConfigured: "已配置", keyChange: "更换", keyClear: "清除", keySave: "保存",
+    err_bad_request: "请求参数有误", err_bad_url: "URL 无效", err_disk_full: "磁盘空间不足",
+    err_auth: "Civitai Key 无效或该模型需登录/订阅", err_authNoKey: "需登录，去设置配置 Civitai Key",
+    err_forbidden: "下载被拒绝，可能是权限限制或临时故障，请稍后重试", err_sha_mismatch: "下载校验不符，已丢弃",
+    err_path_unsafe: "目标路径不安全", err_root_not_found: "下载目标目录不存在或已禁用", err_exists: "目标文件已存在",
+    err_already_running: "已有下载进行中", err_network: "无法连接，请稍后重试", err_cancelled: "已取消",
+    err_import_pending: "已下载，扫描忙碌，稍后重扫可见", err_online_disabled: "联网识别已关闭，去设置开启",
+  },
   cleanup: {
     title: "清理中心", unreferencedModels: "未被引用的模型", countUnused: "{n} 个 · 没有任何 workflow 使用它们",
     reclaimable: "可回收", selectedSummary: "已选 {n} 项 · {size} · 均 0 引用,可安全移除", confirm: "将把 {n} 个文件({size})移入可恢复回收站。继续?", moveToTrash: "移至回收站",

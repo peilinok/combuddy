@@ -83,5 +83,12 @@ export function useSettings() {
     }
     catch (e) { error.value = String(e); }
   }
-  return { settings, roots, error, saveState, addResult, load, save, addRoot, removeRoot };
+  // 独立提交,不经 save() 的 Object.assign(settings.value,...) 乐观合并——key 明文绝不进长期存活的响应式对象 [M9]
+  async function saveApiKey(value: string) {
+    try { const r = await setSettings({ civitai_api_key: value });
+      settings.value = { ...settings.value, civitai_api_key_set: (r as any).civitai_api_key_set };
+      error.value = null;
+    } catch (e) { error.value = String(e); }
+  }
+  return { settings, roots, error, saveState, addResult, load, save, addRoot, removeRoot, saveApiKey };
 }

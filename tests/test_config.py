@@ -46,3 +46,13 @@ def test_set_civitai_settings_and_clamp(tmp_path):
     assert s["online_enrich"] is False and s["nsfw_blur_threshold"] == 32
     config.set_settings(conn, {"nsfw_blur_threshold": -5})
     assert config.get_settings(conn)["nsfw_blur_threshold"] == 0
+
+def test_api_key_stored_separately_and_not_in_get_settings(tmp_path):
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    assert config.get_api_key(conn) == ""                       # 默认空
+    assert "civitai_api_key" not in config.get_settings(conn)   # 绝不进 get_settings
+    config.set_settings(conn, {"civitai_api_key": "sk-secret"})
+    assert config.get_api_key(conn) == "sk-secret"
+    assert "civitai_api_key" not in config.get_settings(conn)   # 存了也不进 get_settings [B2]
+    config.set_settings(conn, {"civitai_api_key": ""})          # 显式清空
+    assert config.get_api_key(conn) == ""

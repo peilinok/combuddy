@@ -88,7 +88,7 @@ Vue 3 + **PrimeVue** + Tailwind + **vue-i18n** (zh/en), **no vue-router and no P
 
 ## Conventions
 - stdlib `sqlite3` only (no ORM); connections use `sqlite3.Row` — access columns by name, not position.
-- Local-first core: no network in the base scan/match/resolve pipeline. The **only** network touches are the optional/toggleable Civitai integration — hash-only enrichment **and user-initiated filename search for missing models** (both gated by the single `online_enrich` toggle) — and the desktop app's startup update-check (version query only). sha256 is computed locally.
+- Local-first core: no network in the base scan/match/resolve pipeline. The **only** network touches are the optional/toggleable Civitai integration — hash-only enrichment, user-initiated filename search for missing models, and **user-initiated model downloads** (all three gated by the single `online_enrich` toggle; downloads use Bearer token auth with automatic redirect unwrapping and cross-origin `Authorization` header stripping) — and the desktop app's startup update-check (version query only). sha256 is computed locally.
 - **Dependency discipline** (dependency-light is the brand): base deps stay `fastapi`/`uvicorn`/`pyyaml`; `pywebview` lives in the `desktop` extra; PyInstaller and Pillow are build-only, never runtime deps (Pillow is lazily imported in `packaging/gen_icons.py` so the module stays importable without it).
 - **Non-target paths stay byte-unchanged**: new run modes (`demo`/`desktop`) and backend params default off/None, so CLI + browser behavior never changes. This "flag defaults false everywhere" discipline is what keeps demo/desktop from leaking into real runs.
 - Match the terse style already in each module; each file has one clear responsibility.

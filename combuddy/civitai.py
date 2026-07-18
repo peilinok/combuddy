@@ -1,4 +1,4 @@
-import json, os, time, urllib.request, urllib.error, urllib.parse
+import hashlib, json, os, time, urllib.request, urllib.error, urllib.parse
 from . import norm
 
 _API = "https://civitai.com/api/v1/model-versions/by-hash/"
@@ -120,6 +120,15 @@ def enrich_models(conn, progress=None, should_cancel=None, fetch=fetch_by_hash, 
 def _int_id(x) -> bool:
     return isinstance(x, int) and not isinstance(x, bool)   # bool 是 int 子类,须排除 [L4]
 
+def _download_of(file: dict) -> dict | None:
+    """从一个 Civitai file 造 download 对象;url 必须 civitai.com、sha 存在才带。"""
+    url = file.get("downloadUrl")
+    sha = (file.get("hashes") or {}).get("SHA256")
+    if not (isinstance(url, str) and url.startswith("https://civitai.com/") and sha):
+        return None
+    return {"url": url, "filename": file.get("name"),
+            "size_kb": file.get("sizeKB"), "sha256": sha.lower()}   # Civitai 大写 → lower [B3]
+
 def _pick_file(files: list) -> dict | None:
     """展示文件:primary 优先 → 首个 type=='Model' → 首个。"""
     for f in files:
@@ -156,7 +165,7 @@ def normalize_search(items: list, ref_name, limit: int = 5) -> list:
         f = _pick_file(chosen.get("files") or [])
         if f is None:
             continue
-        out.append({
+        candidate = {
             "model_name": item.get("name"),
             "version_name": chosen.get("name"),
             "model_type": item.get("type"),
@@ -164,7 +173,11 @@ def normalize_search(items: list, ref_name, limit: int = 5) -> list:
             "civitai_url": f"https://civitai.com/models/{mid}?modelVersionId={vid}",
             "file": {"name": f.get("name"), "size_kb": f.get("sizeKB")},
             "file_match": matched,
-        })
+        }
+        dl = _download_of(f)
+        if dl is not None:
+            candidate["download"] = dl
+        out.append(candidate)
     out.sort(key=lambda c: not c["file_match"])   # file_match 优先,稳定排序保留组内原序
     return out[:limit]
 
@@ -194,12 +207,64 @@ def lookup_by_hash(sha):
     try:
         with urllib.request.urlopen(req, timeout=_TIMEOUT) as r:
             data = json.loads(r.read().decode())
-        return ("found", parse_version(data))
+        ident = parse_version(data)
+        # hash 模式按 sha 选 file [H3]
+        for f in (data.get("files") or []):
+            if ((f.get("hashes") or {}).get("SHA256") or "").lower() == sha:
+                dl = _download_of(f)
+                if dl is not None:
+                    ident["download"] = dl
+                break
+        return ("found", ident)
     except urllib.error.HTTPError as e:
         if e.code == 404:
             return ("notfound", None)
         if e.code == 429:
             return ("rate_limited", None)
+        return ("error", None)
+    except Exception:
+        return ("error", None)
+
+class _NoAuthCrossHostRedirect(urllib.request.HTTPRedirectHandler):
+    """urllib 默认在 302 时把 Authorization 原样带到新域(bpo-33661)。Civitai downloadUrl
+    会 302 到异域 CDN(b2.civitai.com / *.r2.cloudflarestorage.com)——跨 host 必须剥 Authorization,
+    否则 Bearer key 泄漏给 CDN [B1]。sha 兜底管不住:key 在发请求那刻已泄漏。"""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None:
+            old_host = urllib.parse.urlparse(req.full_url).hostname
+            new_host = urllib.parse.urlparse(newurl).hostname
+            if old_host != new_host:
+                new.remove_header("Authorization")   # AbstractHTTPHandler 会把原 header 复制进 new
+        return new
+
+def _build_opener():
+    return urllib.request.build_opener(_NoAuthCrossHostRedirect())
+
+_DL_CHUNK = 1 << 20   # 1 MiB
+
+def download_file(url, dest_part, token, progress=None, should_cancel=None, max_bytes=None):
+    req = urllib.request.Request(url, headers={"User-Agent": _UA})
+    if token:
+        req.add_header("Authorization", f"Bearer {token}")   # header,不进 URL
+    h = hashlib.sha256(); done = 0
+    try:
+        with _build_opener().open(req, timeout=_TIMEOUT) as r, open(dest_part, "wb") as out:
+            total = int(r.getheader("Content-Length") or 0)
+            if progress: progress(0, total)
+            while True:
+                if should_cancel and should_cancel():
+                    return ("cancelled", None)
+                b = r.read(_DL_CHUNK)
+                if not b: break
+                out.write(b); h.update(b); done += len(b)
+                if max_bytes and done > max_bytes:
+                    return ("error", None)
+                if progress: progress(done, total)
+        return ("ok", h.hexdigest())          # hexdigest 恒小写
+    except urllib.error.HTTPError as e:
+        if e.code == 401: return ("auth", None)
+        if e.code == 403: return ("forbidden", None)
         return ("error", None)
     except Exception:
         return ("error", None)
