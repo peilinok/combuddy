@@ -1,18 +1,20 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useLocate } from "../useLocate";
 import { useDesktop } from "../useDesktop";
 import { useScanStatus } from "../useScanStatus";
+import { useDownload } from "../useDownload";
 import { useDemo } from "../useDemo";
-import { postScan } from "../api";
+import { postScan, getRoots } from "../api";
 import { humanSize } from "../format";   // 候选文件大小复用既有 helper(吃 bytes,size_kb 需 ×1024) [H1]
 const { t } = useI18n();
 const { open, loading, mode, result, error, query, search, searchUnfiltered,
         fallbackToName, siteSearchUrl, expectedPath, target, close } = useLocate();
 const { isDesktop, openExternal } = useDesktop();
-const { scanning } = useScanStatus();
+const { scanning, stats } = useScanStatus();
 const { demo } = useDemo();
+const { downloading, progress, downloadError, startDownload } = useDownload();
 
 const path = computed(() => (target.value ? expectedPath(target.value) : ""));
 const candidates = computed(() => (mode.value === "name" ? result.value?.candidates ?? [] : []));
@@ -28,6 +30,36 @@ async function rescan() {
   if (!scanning.value && !demo.value) {
     try { await postScan(); } catch { /* scan-start failure must not block */ }
   }
+}
+
+// 下载:候选行(hash 命中的单候选 / name 候选列表)带 c.download 时可下 [Task 9]
+const modelRoots = ref<any[]>([]);
+const rootChoice = ref<number | null>(null);
+onMounted(async () => {
+  try { const r = await getRoots(); modelRoots.value = (r.roots ?? []).filter((x: any) => x.kind === "model"); }
+  catch { /* 拉取失败:effectiveRootId 保持空,下载按钮自然禁用,不打断既有 locate 流程 */ }
+});
+watch(target, () => { rootChoice.value = null; });   // 每次重新「帮我找」强制重选,防默默下到不常用盘 [M8]
+const effectiveRootId = computed(() => modelRoots.value.length === 1 ? modelRoots.value[0].id : rootChoice.value);
+const hasDownloadable = computed(() =>
+  (hashFound.value && !!result.value?.candidate?.download) ||
+  (mode.value === "name" && candidates.value.some((c: any) => c.download)));
+function keyMissing() { return stats.value.civitai_api_key_set === false; }
+function isActive(c: any) {
+  // 全局单槽位:仅当前候选的 download.filename 与 DOWNLOAD_STATUS 一致才画进度,防挂错行 [M7]
+  const d = c?.download, s = stats.value.download;
+  return !!(d && s?.running && s?.filename === d.filename);
+}
+function canDownload(c: any) {
+  return !!c?.download && !!target.value?.dir_type && effectiveRootId.value != null
+    && !keyMissing() && !downloading.value;   // 预先禁用而非只靠错误码 [M6]
+}
+function buildSpec(c: any, tgt: any, rootId: number) {
+  return { ...c.download, dir_type: tgt.dir_type, ref_string: tgt.ref_string, root_id: rootId };
+}
+function doDownload(c: any) {
+  if (!target.value || !c.download || effectiveRootId.value == null) return;
+  startDownload(buildSpec(c, target.value, effectiveRootId.value));
 }
 </script>
 
@@ -54,17 +86,38 @@ async function rescan() {
     </div>
 
     <div v-if="error" class="text-orange-400 text-sm mb-2">{{ t("locate.err_" + error) }}</div>
+    <!-- 下载失败:同步(403/已在下载)+ 后台(sha_mismatch/auth/disk_full 等)合并展示,否则用户看不到任何失败文案 [B2] -->
+    <div v-if="downloadError" class="text-orange-400 text-sm mb-2">{{ downloadError === "auth" && !stats.civitai_api_key_set ? t("download.err_authNoKey") : t("download.err_" + downloadError) }}</div>
     <div v-if="hashMiss" class="text-color-secondary text-sm mb-2">
       {{ t("locate.hashNotFound") }}
       <button @click="fallbackToName" class="text-primary hover:underline ml-1">{{ t("locate.toNameSearch") }}</button>
     </div>
 
+    <!-- 下载:多 model root 选择器(单 root 直接用,不显示) + 未配 key 提示 [M8] -->
+    <div v-if="hasDownloadable && modelRoots.length > 1" class="mb-2">
+      <select v-model="rootChoice" class="w-full text-xs bg-surface-hover rounded px-2 py-1 outline-none">
+        <option :value="null" disabled>{{ t("download.selectRoot") }}</option>
+        <option v-for="r in modelRoots" :key="r.id" :value="r.id">{{ r.path }}</option>
+      </select>
+    </div>
+    <div v-if="hasDownloadable && keyMissing()" class="text-color-secondary text-[11px] mb-2">{{ t("download.err_authNoKey") }}</div>
+
     <!-- hash 命中的单候选 -->
-    <div v-if="hashFound" class="text-sm py-1 flex items-center gap-2">
-      <span class="text-[11px] px-1.5 py-0.5 rounded bg-primary/15 text-primary shrink-0">{{ result.candidate.model_type }}</span>
-      <span class="text-color truncate flex-1">{{ result.candidate.model_name }} · {{ result.candidate.version_name }}</span>
-      <a v-if="isCivitai(result.candidate.civitai_url)" :href="result.candidate.civitai_url" target="_blank"
-        @click="extern($event, result.candidate.civitai_url)" class="text-primary text-xs shrink-0">{{ t("locate.openCivitai") }}</a>
+    <div v-if="hashFound" class="text-sm py-1">
+      <div class="flex items-center gap-2">
+        <span class="text-[11px] px-1.5 py-0.5 rounded bg-primary/15 text-primary shrink-0">{{ result.candidate.model_type }}</span>
+        <span class="text-color truncate flex-1">{{ result.candidate.model_name }} · {{ result.candidate.version_name }}</span>
+        <a v-if="isCivitai(result.candidate.civitai_url)" :href="result.candidate.civitai_url" target="_blank"
+          @click="extern($event, result.candidate.civitai_url)" class="text-primary text-xs shrink-0">{{ t("locate.openCivitai") }}</a>
+        <button v-if="result.candidate.download && !isActive(result.candidate)" @click="doDownload(result.candidate)"
+          :disabled="!canDownload(result.candidate)" :title="keyMissing() ? t('download.err_authNoKey') : ''"
+          class="text-primary text-xs shrink-0 hover:underline disabled:opacity-50">{{ t("download.cta") }}</button>
+      </div>
+      <div v-if="isActive(result.candidate)" class="mt-1 flex items-center gap-2">
+        <ProgressBar v-if="stats.download?.total" :value="progress" style="height:.4rem" class="flex-1" />
+        <ProgressBar v-else mode="indeterminate" style="height:.4rem" class="flex-1" />
+        <span class="text-color-secondary text-[11px] shrink-0">{{ stats.download?.total ? progress + "%" : t("download.downloading") }}</span>
+      </div>
     </div>
 
     <!-- name 候选列表:主行 + 文件名/大小副行(成功标准 1 要求展示主模型文件名与大小 [H1]) -->
@@ -75,9 +128,17 @@ async function rescan() {
           <span class="text-color-secondary">({{ c.model_type }}, {{ c.base_model }})</span></span>
         <a v-if="isCivitai(c.civitai_url)" :href="c.civitai_url" target="_blank"
           @click="extern($event, c.civitai_url)" class="text-primary text-xs shrink-0">{{ t("locate.openCivitai") }}</a>
+        <button v-if="c.download && !isActive(c)" @click="doDownload(c)"
+          :disabled="!canDownload(c)" :title="keyMissing() ? t('download.err_authNoKey') : ''"
+          class="text-primary text-xs shrink-0 hover:underline disabled:opacity-50">{{ t("download.cta") }}</button>
       </div>
       <div v-if="c.file?.name" class="text-color-secondary text-[11px] pl-1 truncate">
         {{ c.file.name }}<span v-if="c.file.size_kb"> · {{ humanSize(c.file.size_kb * 1024) }}</span></div>
+      <div v-if="isActive(c)" class="mt-1 flex items-center gap-2 pl-1">
+        <ProgressBar v-if="stats.download?.total" :value="progress" style="height:.4rem" class="flex-1" />
+        <ProgressBar v-else mode="indeterminate" style="height:.4rem" class="flex-1" />
+        <span class="text-color-secondary text-[11px] shrink-0">{{ stats.download?.total ? progress + "%" : t("download.downloading") }}</span>
+      </div>
     </div>
 
     <!-- 空态 + 逃生门 -->
