@@ -73,3 +73,7 @@ export const verifyManifest = (file: File | Blob) =>
 
 export const fetchLocate = (p: Record<string, string>) =>
   fetch("/api/locate" + (qs(p) ? "?" + qs(p) : "")).then(jsonOrThrow);
+
+export const postDownload = (spec: any) => fetch("/api/download", { method: "POST",
+  headers: { "Content-Type": "application/json" }, body: JSON.stringify(spec) }).then(jsonOrThrow);
+export const postDownloadCancel = () => fetch("/api/download/cancel", { method: "POST" }).then(jsonOrThrow);
