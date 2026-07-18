@@ -23,6 +23,10 @@ def start_download(conn: sqlite3.Connection, spec: dict) -> dict:
         if not (isinstance(sha, str) and _SHA_RE.fullmatch(sha)):
             return _fail("bad_request")
         sha = sha.lower()
+        # 不可信 HTTP body:字段类型畸形须返机器码而非崩溃(fail-closed)[review Important]
+        if not isinstance(spec.get("ref_string"), str) or not isinstance(spec.get("dir_type"), str) \
+           or isinstance(spec.get("size_kb"), bool) or not isinstance(spec.get("size_kb"), (int, float)):
+            return _fail("bad_request")
         if manifest._safe_civitai_url(spec.get("url")) is None:                   # 域复校验 [B4]
             return _fail("bad_url")
         dir_type = spec.get("dir_type")

@@ -134,3 +134,11 @@ def test_start_download_resets_cancel_at_start(tmp_path, monkeypatch):
     monkeypatch.setattr(download_service.civitai, "download_file", lambda *a, **k: ("ok", "a" * 64))
     download_service.start_download(conn, _spec(rid))
     assert download_service.DOWNLOAD_STATUS["cancel"] is False        # 起点复位 [H9]
+
+def test_start_download_rejects_malformed_types(tmp_path, monkeypatch):
+    conn = db.connect(str(tmp_path / "c.sqlite")); db.init_schema(conn)
+    rid, _ = _mroot(conn, tmp_path)
+    monkeypatch.setattr(download_service.civitai, "download_file", lambda *a, **k: ("ok", "a" * 64))
+    for bad in [{"ref_string": None}, {"dir_type": ["loras"]}, {"size_kb": "big"}]:
+        r = download_service.start_download(conn, _spec(rid, **bad))
+        assert r["error"] == "bad_request" and download_service.DOWNLOAD_STATUS["error"] == "bad_request"
