@@ -51,5 +51,41 @@ def start_download(conn: sqlite3.Connection, spec: dict) -> dict:
         DOWNLOAD_STATUS.update(running=False, phase="idle", revision=DOWNLOAD_STATUS["revision"] + 1)
 
 def _download_and_import(conn, spec, dest, sha, size):
-    # Task 5 实现;本 task 临时:直接返回 ok 以让前置校验测试通过
+    part = dest + ".part"
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    token = config.get_api_key(conn)                       # 只从此取,绝不经前端
+    max_bytes = int(size * 1.05) if size > 0 else _DEFAULT_MAX_BYTES   # size=0 时兜底,勿 `or None` [H2]
+    kind, got = civitai.download_file(
+        spec["url"], part, token,
+        progress=lambda d, t: DOWNLOAD_STATUS.update(downloaded=d, total=t),
+        should_cancel=lambda: DOWNLOAD_STATUS["cancel"], max_bytes=max_bytes)
+    if kind != "ok":
+        _rm(part)
+        return _fail("network" if kind == "error" else kind)   # auth/forbidden/cancelled/network
+    if (got or "").lower() != sha:
+        _rm(part)
+        return _fail("sha_mismatch")
+    if os.path.exists(dest) or DOWNLOAD_STATUS["cancel"]:       # rename 前再查 [L1/L6]
+        _rm(part)
+        return _fail("cancelled" if DOWNLOAD_STATUS["cancel"] else "exists")
+    os.replace(part, dest)                                      # 原子入库
+    conn.execute("UPDATE models SET sha256=? WHERE path=?", (sha, dest))  # 若已存行(极少);正常靠 run_scan
+    conn.commit()
+    DOWNLOAD_STATUS["phase"] = "importing"
+    _ensure_scanned(conn)                                      # 轮询确保 run_scan 跑完一次 [H1]
+    conn.execute("UPDATE models SET sha256=? WHERE path=?", (sha, dest))  # scan 插行后写回已验证 sha [M2]
+    conn.commit()
     return {"ok": True}
+
+def _rm(p):
+    try: os.remove(p)
+    except OSError: pass
+
+def _ensure_scanned(conn, tries=60):
+    # run_scan single-flight:若 scan 在跑则 skip;轮询等它落下再重试,确保文件真入库 [H1]
+    for _ in range(tries):
+        if not scan_service.run_scan(conn).get("skipped"):
+            return
+        deadline = time.monotonic() + 5
+        while scan_service.STATUS["running"] and time.monotonic() < deadline:
+            time.sleep(0.05)
